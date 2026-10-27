@@ -49,8 +49,8 @@ Use Flutter stable (scaffolded with Flutter 3.47.8 / Dart 3.13.7).
 The locally installed SDK is at `../flutter-sdk`; alternatively use `flutter`
 from your PATH.
 
-The public repository excludes the pose model weights while their redistribution
-terms remain unverified. Before running or building the app, download the pinned
+The public repository excludes the pose model weights; download them locally
+to avoid storing the binary in Git. Before running or building the app, download the pinned
 model directly from Google and verify its checksum:
 
 ```sh
@@ -169,8 +169,8 @@ Runtime/model assets are served locally with no frame upload or storage.
 Optional consented testing feedback calls Firebase Auth/Firestore; the camera
 page itself otherwise needs no external requests.
 See [asset attribution](web/vendor/mediapipe/ATTRIBUTION.md).
-The runtime's Apache-2.0 license is included; separate model-specific licensing
-still needs verification before public distribution.
+The runtime's Apache-2.0 license is included. The official model card explicitly
+lists Apache-2.0 for the BlazePose models; see the attribution for source evidence.
 
 ## Tester feedback and Firebase
 
@@ -225,14 +225,16 @@ privately. Never commit or share its files. Gradle reads `signing.properties`
 there, or the file specified by `SIJDA_SIGNING_PROPERTIES`. Release builds fail
 explicitly when signing is absent rather than silently using debug signing.
 
-Sijda has been created in Play Console. Version `0.1.0` / code `1` was uploaded
-and saved as a **closed-test draft only**, pending the owner's physical-device test.
+Sijda has been created in Play Console. Version `0.1.1` / code `2`, including
+low-light assistance and privacy access, is prepared for closed Alpha testing.
+Publishing overview shows its changes sent for review, with Google's quick
+checks running. Approval and tester installation availability are not verified.
 A signed bundle is built at `build/app/outputs/bundle/release/app-release.aab`.
 A directly installable, signature-verified release APK for physical-device testing
 is at `build/app/outputs/flutter-apk/app-release.apk` (approximately 63.4 MB).
-No release has been sent for review or rolled out to testers.
-The low-light changes are local only; the saved version-1 Play draft remains the
-earlier build without these additions until a new release is explicitly uploaded.
+Production remains untouched. The superseded version-1 bundle was removed
+from the release. Closed-test countries are Pakistan, United Arab Emirates,
+United Kingdom and United States. Physical-device validation is still pending.
 Publisher: **MJ.**; public support/privacy/deletion contact:
 **fehmatics@gmail.com**. The [privacy-policy HTML](web/privacy.html) is written;
 the policy-only GitHub Pages deployment is configured by

@@ -14,8 +14,12 @@
 - Model SHA-256:
   `59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a`.
 
-The runtime license is verified from upstream. Separate model-specific terms
-have not yet been verified; resolve model licensing before public distribution.
+The runtime license is verified from upstream. The official BlazePose GHUM 3D
+model card linked above describes Lite, Full and Heavy models and explicitly
+states "LICENSED UNDER Apache License, Version 2.0". This model-specific
+license evidence was verified on 28 October 2026; it is not inferred from a
+notebook's code license. Retain the bundled Apache-2.0 license and attribution
+when distributing the runtime and downloaded model.
 The public repository includes the licensed runtime, but excludes model weights.
 Download the model directly from Google using the setup instructions in the
 root README and verify the checksum above. Review the upstream model terms
