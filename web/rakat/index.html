@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Experimental automatic rakat counter</title>
+  <style>
+    :root { font: 16px system-ui, sans-serif; color: #233c34; background: #f8f7f2; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 12px; }
+    h2 { font-size: 1.3rem; margin-top: 0; }
+    p { line-height: 1.45; }
+    button, select, input, textarea { font: inherit; padding: 12px; border: 1px solid #176b58;
+      border-radius: 10px; background: white; color: #174e40; min-height: 46px; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
+    button.primary { background: #176b58; color: white; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+    .preview { position: relative; background: #162a24; border-radius: 12px; overflow: hidden; }
+    video { width: 100%; max-height: 240px; display: block; object-fit: contain; transform: scaleX(-1); }
+    #status { padding: 12px; background: #e4eee8; border-radius: 10px; min-height: 60px; }
+    #totals { font-size: 1.3rem; font-weight: 600; }
+    .warning { color: #7a411e; }
+    ol { padding-left: 24px; }
+    form { display: grid; gap: 12px; }
+    form label { display: grid; gap: 6px; }
+    input, select, textarea { max-width: 100%; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .consent { display: flex; align-items: flex-start; gap: 12px; }
+    #feedback-status { white-space: pre-wrap; }
+    .screen-light { background: white; }
+    body.screen-light { min-height: 100vh; }
+    .screen-light .preview video { max-height: 120px; }
+    .screen-light .setup-info { display: none; }
+    .screen-light #status { background: white; border: 1px solid #176b58; }
+    #lighting-status, #screen-light-status { font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h2>Automatic counting · experimental</h2>
+  <p class="setup-info">Keep this page open with the screen on. Position the front camera so your
+    head, hips, knees and feet stay visible, including on the floor.
+    No exact distance is required, but a very low or tilted view may not work.</p>
+  <p class="warning">Estimates only. Not validated for prayer use or all phones,
+    clothing or mobility needs. Only standard standing sequences are supported.
+    Review results; this does not determine prayer validity.</p>
+  <div class="controls">
+    <label for="target">Session target</label>
+    <select id="target"><option value="2">2 rakat</option><option value="3">3 rakat</option><option value="4">4 rakat</option></select>
+    <button id="start" class="primary">Enable front camera</button>
+    <button id="stop" disabled>Stop camera</button>
+  </div>
+  <div class="preview"><video id="video" playsinline muted aria-label="Mirrored front camera preview"></video></div>
+  <div class="controls">
+    <button id="screen-light" aria-pressed="false" disabled>Turn screen light on</button>
+  </div>
+  <p id="screen-light-status" role="status">Screen light off. This can help nearby, but cannot guarantee tracking in darkness. Uses extra battery.</p>
+  <p id="lighting-status" class="warning" role="status">Lighting check off. Camera frames are sampled only on-device while tracking.</p>
+  <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
+  <p id="totals">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
+  <div class="controls">
+    <button id="calibrate" disabled>Calibrate standing position</button>
+    <button id="resume" disabled>Restart current rakat</button>
+    <button id="undo" disabled>Undo last rakat</button>
+    <button id="reset">New automatic session</button>
+  </div>
+  <ol id="history" aria-label="Estimated rakat history"></ol>
+  <p class="setup-info">Start standing for calibration. The tracker then expects standing → ruku →
+    standing → sajdah → sitting → sajdah → sitting/standing.
+    A rakat estimate is added only after leaving the second sajdah.</p>
+  <p>Camera frames stay on your device: no recording or uploading. The bundled
+    pose model loads from this app (about 26 MB with runtime files). HTTPS is
+    required on phones. Camera stops on Stop, leaving this screen, or hiding the
+    page. Sessions are not saved and do not change qaza balances. Motion sensors
+    cannot measure your body while the phone is stationary; proximity is not
+    generally available in browsers.</p>
+  <details>
+    <summary>Report test results / placement feedback</summary>
+    <p>Stop the camera before filling this in. Counts and a limited posture-transition
+      log (no images or raw body landmarks) are captured when you submit.
+      Feedback is saved locally. Upload is optional and requires your consent.
+      Do not include names, contact details or other sensitive information.</p>
+    <form id="feedback-form">
+      <label>Was the count right?
+        <select name="verdict" required>
+          <option value="unsure">Unsure</option><option value="correct">Correct</option><option value="incorrect">Incorrect</option>
+        </select>
+      </label>
+      <label>Actual rakat you completed <input name="expectedRakat" type="number" min="0" max="100" step="1" required></label>
+      <label>Actual sajdahs you completed <input name="expectedSajdahs" type="number" min="0" max="200" step="1" required></label>
+      <label>Mobile placement
+        <select name="placement"><option value="floor-tilted">On floor, tilted upright</option><option value="low-stand">Low phone stand</option><option value="chair">Chair height</option><option value="shelf">Shelf/table</option><option value="other">Other (describe below)</option></select>
+      </label>
+      <label>Approximate distance
+        <select name="distance"><option value="unknown">Not sure</option><option value="under-1m">Under 1 metre</option><option value="1-2m">1–2 metres</option><option value="over-2m">Over 2 metres</option></select>
+      </label>
+      <label>Lighting <select name="lighting"><option value="normal">Normal</option><option value="bright">Bright</option><option value="dim">Dim</option></select></label>
+      <label>Phone model and browser <input name="device" maxlength="120" placeholder="e.g. Galaxy A54, Chrome" required></label>
+      <label>What happened? Include whether screen light was on or off.
+        <textarea name="notes" rows="3" maxlength="1000" placeholder="Screen light on/off, room lighting, camera tilt, clothing, missing/double counts, which posture was missed..."></textarea></label>
+      <label class="consent"><input name="consent" type="checkbox">
+        I consent to uploading this report, device/browser information and the posture-transition log to Sijda's Firebase testing backend for improving detection. No camera images are sent.</label>
+      <button id="submit-feedback" class="primary" type="submit">Save test feedback</button>
+    </form>
+    <div class="controls"><button id="export-feedback">Export saved feedback (JSON)</button></div>
+    <p id="feedback-status" role="status"></p>
+    <details><summary>Sample feedback (example only, never uploaded)</summary><pre id="feedback-sample"></pre></details>
+    <p>Local feedback persists in this browser until app/browser data is cleared.
+      Uploads require an operational Firebase backend; failures are displayed.
+      Uploaded feedback is stored in Iowa, USA, until manually deleted by the
+      project owner. Keep the report ID shown after uploading if you want to
+      request deletion. Feedback does not change counts or automatically retrain the model.</p>
+  </details>
+  <script type="module" src="feedback.mjs"></script>
+</body>
+</html>

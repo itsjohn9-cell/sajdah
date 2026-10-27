@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function count(value, maximum) {
+      return value is int && value >= 0 && value <= maximum;
+    }
+    function shortText(value, maximum) {
+      return value is string && value.size() <= maximum;
+    }
+    match /feedback/{reportId} {
+      allow create: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && request.resource.data.keys().hasOnly([
+          'id', 'sessionId', 'algorithmVersion', 'target', 'detectedRakat',
+          'detectedSajdahs', 'interruptions', 'completed', 'transitions',
+          'schemaVersion', 'createdAt', 'sample', 'verdict', 'expectedRakat',
+          'expectedSajdahs', 'placement', 'distance', 'lighting', 'device',
+          'notes', 'browser', 'viewport', 'owner'
+        ])
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.id == reportId
+        && shortText(reportId, 64)
+        && shortText(request.resource.data.sessionId, 64)
+        && request.resource.data.algorithmVersion == 'pose-heuristic-v2'
+        && request.resource.data.target in [2, 3, 4]
+        && count(request.resource.data.detectedRakat, 4)
+        && count(request.resource.data.detectedSajdahs, 10)
+        && count(request.resource.data.interruptions, 1000000)
+        && request.resource.data.completed is bool
+        && request.resource.data.transitions is list
+        && request.resource.data.transitions.size() <= 500
+        && request.resource.data.schemaVersion == 1
+        && shortText(request.resource.data.createdAt, 40)
+        && request.resource.data.sample == false
+        && request.resource.data.verdict in ['correct', 'incorrect', 'unsure']
+        && count(request.resource.data.expectedRakat, 100)
+        && count(request.resource.data.expectedSajdahs, 200)
+        && (request.resource.data.verdict != 'correct' ||
+          (request.resource.data.expectedRakat == request.resource.data.detectedRakat &&
+           request.resource.data.expectedSajdahs == request.resource.data.detectedSajdahs))
+        && request.resource.data.placement in ['floor-tilted', 'low-stand', 'chair', 'shelf', 'other']
+        && request.resource.data.distance in ['under-1m', '1-2m', 'over-2m', 'unknown']
+        && request.resource.data.lighting in ['bright', 'normal', 'dim']
+        && shortText(request.resource.data.device, 120)
+        && request.resource.data.device.size() > 0
+        && shortText(request.resource.data.notes, 1000)
+        && shortText(request.resource.data.browser, 300)
+        && shortText(request.resource.data.viewport, 40);
+      allow read, update, delete: if false;
+    }
+  }
+}
