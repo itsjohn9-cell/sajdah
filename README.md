@@ -233,8 +233,11 @@ is at `build/app/outputs/flutter-apk/app-release.apk` (approximately 63.4 MB).
 No release has been sent for review or rolled out to testers.
 The low-light changes are local only; the saved version-1 Play draft remains the
 earlier build without these additions until a new release is explicitly uploaded.
-No support/deletion email was supplied, so a public privacy policy and store
-contact details cannot be finalized. Existing tester-list names supplied by the
+Publisher: **MJ.**; public support/privacy/deletion contact:
+**fehmatics@gmail.com**. The [privacy-policy HTML](web/privacy.html) is written;
+public hosting, the in-app policy link and Play Console URL entry remain pending.
+See the [store-readiness checklist](docs/STORE_READINESS.md) and
+[Data safety worksheet](docs/DATA_SAFETY.md). Existing tester-list names supplied by the
 owner map to the existing "Closed testers", "Fam" and "Testers" email lists,
 which were selected and saved in Play Console. No tester email addresses were
 copied into this repository.
