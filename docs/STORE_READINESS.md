@@ -8,13 +8,13 @@ Android package: `app.sijda.sijda`
 
 | Item | Location | State |
 |---|---|---|
-| Public privacy-policy page | [web/privacy.html](../web/privacy.html) | Policy-only GitHub Pages workflow configured; verify deployment and Console URL |
+| Public privacy-policy page | [web/privacy.html](../web/privacy.html) | Live on GitHub Pages; URL saved in Play Console, not sent for review |
 | Data safety preparation | [DATA_SAFETY.md](DATA_SAFETY.md) | Worksheet only; owner must verify live Console answers |
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Runtime license included; model redistribution terms unresolved |
 | Setup and feature limitations | [README](../README.md) | Includes model download/checksum instructions |
 | Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | Version 1 uploaded as a draft; predates low-light additions |
-| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Low-light build for device testing; not committed |
+| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Local testing output; rebuild after source changes; not committed |
 
 ## Privacy-policy hosting
 
@@ -32,6 +32,11 @@ not the app, model or feedback data. Confirm the deployment works before
 shipping the new build and save its URL in Play Console. The existing uploaded
 version-1 draft does not contain this link. Review submission and rollout
 remain blocked by the gates below.
+
+The public policy at https://itsjohn9-cell.github.io/sijda/privacy.html was
+verified over HTTPS. Its URL was saved on Play Console's Privacy policy page;
+Console confirmed "Change saved. Send for review in Publishing overview."
+This is a saved configuration change, not approval, review submission or release.
 
 ## Before closed-test rollout
 
