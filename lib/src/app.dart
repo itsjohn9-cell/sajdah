@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'store.dart';
 import 'tasbeeh_page.dart';
@@ -17,6 +18,32 @@ class _SijdaHomeState extends State<SijdaHome> {
   int _tab = 0;
   int _rakat = 0;
   int _rakatTarget = 2;
+
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse('https://itsjohn9-cell.github.io/sijda/privacy.html');
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      throw StateError('No application could open the privacy policy.');
+    } catch (error, stack) {
+      debugPrint('Sijda privacy link failed: $error\n$stack');
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Could not open privacy policy'),
+          content: SelectableText(
+            'Open $uri in your browser, or contact fehmatics@gmail.com.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,8 +81,8 @@ class _SijdaHomeState extends State<SijdaHome> {
                   context: context,
                   applicationName: 'Sijda',
                   applicationVersion: '0.1.0',
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       'A quiet companion for your daily worship.\n\n'
                       'Counters and balances are saved on this device. '
                       'No account or location access is needed. '
@@ -69,6 +96,13 @@ class _SijdaHomeState extends State<SijdaHome> {
                       'backup and sync are not available yet.\n\n'
                       'This is a personal record, not a religious ruling. '
                       'Consult a trusted scholar for individual questions.',
+                    ),
+                    TextButton(
+                      onPressed: _openPrivacyPolicy,
+                      child: const Text('Read full privacy policy'),
+                    ),
+                    const SelectableText(
+                      'Privacy and deletion: fehmatics@gmail.com',
                     ),
                   ],
                 ),

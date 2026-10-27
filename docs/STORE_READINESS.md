@@ -8,7 +8,7 @@ Android package: `app.sijda.sijda`
 
 | Item | Location | State |
 |---|---|---|
-| Public privacy-policy page | [web/privacy.html](../web/privacy.html) | Written; stable public hosting and Play URL entry still pending |
+| Public privacy-policy page | [web/privacy.html](../web/privacy.html) | Policy-only GitHub Pages workflow configured; verify deployment and Console URL |
 | Data safety preparation | [DATA_SAFETY.md](DATA_SAFETY.md) | Worksheet only; owner must verify live Console answers |
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Runtime license included; model redistribution terms unresolved |
@@ -25,10 +25,13 @@ Deploy the policy to a stable, public HTTPS page (for example Firebase Hosting
 or a correctly configured GitHub Pages site), verify it works signed out and
 on mobile without authentication, then enter that URL in Play Console.
 
-The policy must also be reachable from the app/store listing. The current app
-has privacy information but does not yet link to a final hosted policy.
-Adding the hosted link requires a new build. Hosting, Console submission and
-rollout are not performed by this documentation change.
+The app's About/privacy dialog and camera page link to
+https://itsjohn9-cell.github.io/sijda/privacy.html. The
+[Pages workflow](../.github/workflows/privacy-pages.yml) deploys only the policy,
+not the app, model or feedback data. Confirm the deployment works before
+shipping the new build and save its URL in Play Console. The existing uploaded
+version-1 draft does not contain this link. Review submission and rollout
+remain blocked by the gates below.
 
 ## Before closed-test rollout
 

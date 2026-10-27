@@ -235,7 +235,10 @@ The low-light changes are local only; the saved version-1 Play draft remains the
 earlier build without these additions until a new release is explicitly uploaded.
 Publisher: **MJ.**; public support/privacy/deletion contact:
 **fehmatics@gmail.com**. The [privacy-policy HTML](web/privacy.html) is written;
-public hosting, the in-app policy link and Play Console URL entry remain pending.
+the policy-only GitHub Pages deployment is configured by
+[workflow](.github/workflows/privacy-pages.yml). The app links to
+https://itsjohn9-cell.github.io/sijda/privacy.html. Verify deployment and the
+Play Console policy URL before submission.
 See the [store-readiness checklist](docs/STORE_READINESS.md) and
 [Data safety worksheet](docs/DATA_SAFETY.md). Existing tester-list names supplied by the
 owner map to the existing "Closed testers", "Fam" and "Testers" email lists,

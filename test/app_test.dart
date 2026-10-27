@@ -6,6 +6,20 @@ import 'package:sijda/src/store.dart';
 import 'store_test.dart' show MemoryStorage;
 
 void main() {
+  testWidgets('about dialog exposes privacy policy and deletion contact', (
+    tester,
+  ) async {
+    await tester.pumpWidget(SijdaApp(store: SijdaStore(MemoryStorage())));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('About and privacy'));
+    await tester.pumpAndSettle();
+    expect(find.text('Read full privacy policy'), findsOneWidget);
+    expect(
+      find.text('Privacy and deletion: fehmatics@gmail.com'),
+      findsOneWidget,
+    );
+  });
+
   Future<void> openTab(WidgetTester tester, String label) async {
     await tester.tap(
       find.descendant(
