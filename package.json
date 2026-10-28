@@ -4,11 +4,13 @@
   "type": "module",
   "scripts": {
     "test": "node --experimental-vm-modules --test test/*_test.mjs",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-sijda 'node --test test/firestore_rules.mjs'"
+    "test:rules": "firebase emulators:exec --only firestore --project demo-sijda 'node --test test/firestore_rules.mjs'",
+    "publish:play": "node scripts/publish_play_console.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "firebase": "^12.19.0",
-    "firebase-tools": "^15.34.1"
+    "firebase-tools": "^15.34.1",
+    "googleapis": "^178.0.0"
   }
 }
