@@ -86,7 +86,7 @@ Android package identifier is `app.sijda.sijda`.
 - `flutter build web`: successful.
 - Browser smoke check: tasbeeh counting and persistence across reload; desktop
   and phone-sized layouts inspected.
-- 40 Node regression tests cover counting, pose inputs, async camera lifecycle,
+- 55 Node regression tests cover counting, pose inputs, async camera lifecycle,
   low-light assistance, feedback validation and upload failures. Five Firestore emulator tests exercise
   server authorization. See [detailed cases and device matrix](test/README.md).
 - Camera state-machine/landmark tests use synthetic observations, not real
@@ -200,8 +200,10 @@ writes/reads/sample submissions. All integration-test records/users were removed
 The report contains count summaries and at most 500 coarse transition entries,
 not images, videos or raw body landmarks. Device/browser details and optional
 free text can still be sensitive; do not enter personal information.
-Local JSON export is available in browsers; Android's embedded view explicitly
-reports that native download export is not implemented. Upload errors retain
+Local JSON export downloads a file in browsers and also displays selectable
+JSON. Android's embedded view displays the JSON for long-press/select-all/copy
+to a private file; native file downloads are not implemented. Export never
+uploads feedback. Upload errors retain
 the local copy. No backend submission is claimed successful until acknowledged.
 
 ```sh

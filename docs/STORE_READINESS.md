@@ -13,8 +13,8 @@ Android package: `app.sijda.sijda`
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Apache-2.0 runtime license included; official model-card license verified |
 | Setup and feature limitations | [README](../README.md) | Includes model download/checksum instructions |
-| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.2/code 3 uploaded and saved; closed-test update submitted, quick checks running |
-| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.2/code 3 for physical-device testing; not committed |
+| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.3/code 4 built and signed locally; ready for upload |
+| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed 0.1.3/code 4 for physical-device testing; not committed |
 
 ## Privacy-policy hosting
 
@@ -63,6 +63,16 @@ validation on the affected phone or establish real-world counting accuracy.
 Console displayed 178 countries during this update, unlike the initial four.
 No geography settings were changed; the owner should verify the intended
 selection in Console.
+
+### Sensors, feedback export and enhanced pose estimation update
+
+Version `0.1.3` / code `4`, release
+`0.1.3 (4) - sensors, feedback export and pose improvements`, addresses
+feedback navigation and export, adds Android hardware proximity/light sensor
+bridges, introduces phone orientation detection, profile/upper-body pose
+classification, and mat mode detection.
+Validation passed: 55 Node tests, 23 Flutter tests, Flutter analysis, web
+build, and signed Android release AAB/APK builds.
 
 ## Before closed-test rollout
 

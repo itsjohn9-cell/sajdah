@@ -56,7 +56,7 @@
     <p id="totals" aria-live="polite">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
     <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
     <p id="session-state">Not tracking. No completed rakat estimated yet.</p>
-    <a href="#feedback-section">Review / report this test</a>
+    <a id="review-feedback" href="#feedback-section">Review / report this test</a>
   </section>
   <p class="warning">Experimental estimates, not confirmation of prayer validity.</p>
   <details>
@@ -132,6 +132,11 @@
       <button id="submit-feedback" class="primary" type="submit">Save test feedback</button>
     </form>
     <div class="controls"><button id="export-feedback">Export saved feedback (JSON)</button></div>
+    <div id="feedback-export" hidden>
+      <label for="feedback-json">Saved feedback JSON (select all and copy)</label>
+      <textarea id="feedback-json" rows="8" readonly spellcheck="false" style="width: 100%"></textarea>
+      <p>Save a private copy before clearing app data. This can contain your notes and device details.</p>
+    </div>
     <p id="feedback-status" role="status"></p>
     <details><summary>Sample feedback (example only, never uploaded)</summary><pre id="feedback-sample"></pre></details>
     <p>Local feedback persists in this browser until app/browser data is cleared.

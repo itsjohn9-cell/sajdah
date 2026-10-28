@@ -1,8 +1,14 @@
 package app.sijda.sijda
 
 import android.content.Context
+import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.app.AlertDialog
 import android.graphics.Color
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import android.util.Log
 import android.view.View
@@ -15,6 +21,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
@@ -65,7 +72,7 @@ class RakatCameraView(
                     restoreBrightness()
                     true
                 } else if (!disposed && activity.cameraForeground &&
-                    webView.url == "$ORIGIN${PREFIX}web/rakat/index.html") {
+                    webView.url?.substringBefore('#') == "$ORIGIN${PREFIX}web/rakat/index.html") {
                     if (previousBrightness == null) previousBrightness = activity.window.attributes.screenBrightness
                     activity.window.attributes = activity.window.attributes.apply { screenBrightness = 1f }
                     true
@@ -92,7 +99,41 @@ class RakatCameraView(
         }
     }
 
+    private val sensorManager = activity.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    private val proximitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+    private val lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
+
+    private inner class SensorBridge : SensorEventListener {
+        @Volatile private var latestProximity: Float = -1f
+        @Volatile private var latestLux: Float = -1f
+
+        override fun onSensorChanged(event: SensorEvent?) {
+            when (event?.sensor?.type) {
+                Sensor.TYPE_PROXIMITY -> latestProximity = event.values[0]
+                Sensor.TYPE_LIGHT -> latestLux = event.values[0]
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+        @JavascriptInterface
+        fun getProximity(): Float = latestProximity
+
+        @JavascriptInterface
+        fun getLux(): Float = latestLux
+
+        @JavascriptInterface
+        fun hasProximity(): Boolean = proximitySensor != null
+
+        @JavascriptInterface
+        fun hasLightSensor(): Boolean = lightSensor != null
+    }
+
+    private val sensorBridge = SensorBridge()
+
     init {
+        proximitySensor?.let { sensorManager?.registerListener(sensorBridge, it, SensorManager.SENSOR_DELAY_UI) }
+        lightSensor?.let { sensorManager?.registerListener(sensorBridge, it, SensorManager.SENSOR_DELAY_UI) }
         webView.setBackgroundColor(Color.rgb(248, 247, 242))
         webView.settings.apply {
             javaScriptEnabled = true
@@ -104,9 +145,23 @@ class RakatCameraView(
             userAgentString = "$userAgentString SijdaAndroid/0.1"
         }
         webView.addJavascriptInterface(LightingBridge(), "SijdaLighting")
+        webView.addJavascriptInterface(sensorBridge, "SijdaSensors")
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                request.url.toString() != "$ORIGIN${PREFIX}web/rakat/index.html"
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val uri = request.url
+                if (uri.buildUpon().fragment(null).build().toString() ==
+                    "$ORIGIN${PREFIX}web/rakat/index.html") return false
+                if (request.isForMainFrame &&
+                    uri.toString() == "https://itsjohn9-cell.github.io/sijda/privacy.html") {
+                    try {
+                        activity.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    } catch (error: ActivityNotFoundException) {
+                        Log.e("SijdaPrivacy", "No browser can open the privacy policy", error)
+                        Toast.makeText(activity, "Could not open privacy policy. Contact fehmatics@gmail.com.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                return true
+            }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val uri = request.url
@@ -192,7 +247,9 @@ class RakatCameraView(
         stopCamera()
         activity.cancelCameraRequest()
         disposed = true
+        sensorManager?.unregisterListener(sensorBridge)
         webView.removeJavascriptInterface("SijdaLighting")
+        webView.removeJavascriptInterface("SijdaSensors")
         webView.loadUrl("about:blank")
         webView.stopLoading()
         webView.destroy()

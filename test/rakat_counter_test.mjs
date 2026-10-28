@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RakatCounter, standingCalibration, classifyPose } from "../web/rakat/counter.mjs";
+import { RakatCounter, standingCalibration, adaptiveCalibration, classifyPose, detectOrientation, diagnosePlacement } from "../web/rakat/counter.mjs";
 
 function session(target = 2) {
   const counter = new RakatCounter(target);
@@ -222,4 +222,128 @@ test("normalized calibration tolerates moderate framing changes without fixed di
     assert.ok(calibration);
     assert.equal(classifyPose(pose, calibration), "standing");
   }
+});
+
+test("detectOrientation categorizes phone pitch and angle", () => {
+  assert.equal(detectOrientation(0, 0), "flat");
+  assert.equal(detectOrientation(15, 0), "flat");
+  assert.equal(detectOrientation(-15, 0), "flat");
+  assert.equal(detectOrientation(45, 0), "inclined");
+  assert.equal(detectOrientation(85, 0), "upright");
+  assert.equal(detectOrientation(-30, 0), "downward");
+  assert.equal(detectOrientation(NaN, 0), "unknown");
+});
+
+test("side-profile landmarks calibrate and classify all prayer postures", () => {
+  // Synthesize side profile where right side is occluded
+  const leftSidePoints = points();
+  for (const idx of [12, 24, 26, 28]) leftSidePoints[idx].visibility = 0.1;
+
+  // Strict full-body calibration rejects it
+  assert.equal(standingCalibration(leftSidePoints), null);
+
+  // Adaptive calibration succeeds with mode: 'side'
+  const sideCal = adaptiveCalibration(leftSidePoints);
+  assert.ok(sideCal);
+  assert.equal(sideCal.mode, "side");
+  assert.equal(sideCal.side, "left");
+
+  // Standing
+  assert.equal(classifyPose(leftSidePoints, sideCal), "standing");
+
+  // Ruku (bow)
+  const ruku = points({ head: 0.51, shoulder: 0.5 });
+  for (const idx of [12, 24, 26, 28]) ruku[idx].visibility = 0.1;
+  assert.equal(classifyPose(ruku, sideCal), "bow");
+
+  // Sitting
+  const sitting = points({ head: 0.48, shoulder: 0.58, hip: 0.8, knee: 0.82 });
+  for (const idx of [12, 24, 26, 28]) sitting[idx].visibility = 0.1;
+  assert.equal(classifyPose(sitting, sideCal), "sitting");
+
+  // Sajdah
+  const sajdah = points({ head: 0.88, shoulder: 0.81, hip: 0.75, knee: 0.84 });
+  for (const idx of [12, 24, 26, 28]) sajdah[idx].visibility = 0.1;
+  assert.equal(classifyPose(sajdah, sideCal), "sajdah");
+});
+
+test("upper-body landmarks calibrate and classify when lower legs are out of frame", () => {
+  // Synthesize upper-body view (ankles and knees off-screen/occluded)
+  const upperPoints = points();
+  for (const idx of [25, 26, 27, 28]) upperPoints[idx].visibility = 0.1;
+
+  assert.equal(standingCalibration(upperPoints), null);
+
+  const upperCal = adaptiveCalibration(upperPoints);
+  assert.ok(upperCal);
+  assert.equal(upperCal.mode, "upper");
+
+  // Standing
+  assert.equal(classifyPose(upperPoints, upperCal), "standing");
+
+  // Bowing (head lowers, torso horizontal)
+  const ruku = points({ head: 0.45, shoulder: 0.44 });
+  for (const idx of [25, 26, 27, 28]) ruku[idx].visibility = 0.1;
+  assert.equal(classifyPose(ruku, upperCal), "bow");
+
+  // Sitting (head lower than standing, torso upright)
+  const sitting = points({ head: 0.45, shoulder: 0.65 });
+  for (const idx of [25, 26, 27, 28]) sitting[idx].visibility = 0.1;
+  assert.equal(classifyPose(sitting, upperCal), "sitting");
+
+  // Sajdah (head near bottom of frame)
+  const sajdah = points({ head: 0.88, shoulder: 0.85 });
+  for (const idx of [25, 26, 27, 28]) sajdah[idx].visibility = 0.1;
+  assert.equal(classifyPose(sajdah, upperCal), "sajdah");
+});
+
+test("mat mode detects sajdah via proximity and optical occlusion", () => {
+  const matCal = { mode: "mat", orientation: "flat" };
+
+  // Hardware proximity sensor triggered (forehead within 5cm)
+  assert.equal(classifyPose(null, matCal, { proximity: true }), "sajdah");
+  assert.equal(classifyPose(null, matCal, { proximityDistance: 2.0 }), "sajdah");
+
+  // Optical proximity triggered (face/head covering camera)
+  assert.equal(classifyPose(null, matCal, { opticalProximity: true }), "sajdah");
+  assert.equal(classifyPose(null, matCal, { isCovered: true }), "sajdah");
+
+  // When not prostrating, standing or sitting detected
+  const sittingPoints = points({ head: 0.4, shoulder: 0.6 });
+  assert.equal(classifyPose(sittingPoints, matCal, { faceScale: 0.4 }), "sitting");
+  assert.equal(classifyPose(points(), matCal, { faceScale: 0.1 }), "standing");
+});
+
+test("diagnosePlacement provides actionable guidance for extreme conditions", () => {
+  // Multiple people
+  const diagMulti = diagnosePlacement({ numPoses: 2 });
+  assert.equal(diagMulti.code, "multiple_people");
+  assert.match(diagMulti.fix, /out of frame/);
+
+  // Dim lighting
+  const diagDim = diagnosePlacement({ lightingCondition: "dim" });
+  assert.equal(diagDim.code, "dim_lighting");
+  assert.match(diagDim.fix, /screen light/i);
+
+  // Backlit
+  const diagBacklit = diagnosePlacement({ lightingCondition: "uneven" });
+  assert.equal(diagBacklit.code, "backlit");
+  assert.match(diagBacklit.fix, /light/);
+
+  // Downward tilt
+  const diagTilt = diagnosePlacement({ orientation: "downward", pitch: -30 });
+  assert.equal(diagTilt.code, "tilted_down");
+  assert.match(diagTilt.fix, /upward/);
+
+  // Mat mode guidance when tracking lost
+  const diagMat = diagnosePlacement({ orientation: "flat", timeSinceLastDetection: 2000 });
+  assert.equal(diagMat.code, "mat_mode_guide");
+  assert.match(diagMat.fix, /prostration spot/);
+
+  // Head cut off
+  const cutOffPoints = points();
+  cutOffPoints[0].y = 0.02;
+  const diagCut = diagnosePlacement({ points: cutOffPoints });
+  assert.equal(diagCut.code, "head_cut_off");
+  assert.match(diagCut.fix, /upward/);
 });

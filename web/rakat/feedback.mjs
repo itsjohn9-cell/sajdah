@@ -12,6 +12,12 @@ const sample = {
 };
 document.getElementById("feedback-sample").textContent = JSON.stringify(sample, null, 2);
 
+document.getElementById("review-feedback").addEventListener("click", () => {
+  const section = document.getElementById("feedback-section");
+  section.open = true;
+  section.style.scrollMarginTop = `${document.querySelector(".session-summary").offsetHeight + 12}px`;
+});
+
 form.addEventListener("submit", async event => {
   event.preventDefault();
   if (!form.reportValidity() || button.disabled) return;
@@ -59,13 +65,20 @@ form.addEventListener("submit", async event => {
 });
 
 document.getElementById("export-feedback").addEventListener("click", () => {
+  const output = document.getElementById("feedback-export");
+  const text = document.getElementById("feedback-json");
+  output.hidden = true;
+  text.value = "";
   try {
-    if (navigator.userAgent.includes("SijdaAndroid/")) {
-      throw new Error("JSON download is available in the browser app only. Native feedback stays saved locally; use consented upload when configured.");
-    }
     const reports = JSON.parse(localStorage.getItem("sijda.feedback.v1") ?? "[]");
     if (!Array.isArray(reports)) throw new Error("Invalid saved feedback format.");
-    const url = URL.createObjectURL(new Blob([JSON.stringify(reports, null, 2)], { type: "application/json" }));
+    text.value = JSON.stringify(reports, null, 2);
+    output.hidden = false;
+    if (navigator.userAgent.includes("SijdaAndroid/")) {
+      message.textContent = `${reports.length} saved reports ready. Long-press the JSON below, select all and copy to a private file. Nothing uploaded.`;
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([text.value], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = "sijda-testing-feedback.json";
@@ -73,6 +86,7 @@ document.getElementById("export-feedback").addEventListener("click", () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     message.textContent = `Exported ${reports.length} reports. Sample feedback is not included.`;
   } catch (error) {
+    console.error("Sijda feedback export failed", error);
     message.textContent = `Feedback export failed: ${error.message}`;
   }
 });

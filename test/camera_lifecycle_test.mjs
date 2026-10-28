@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
-import { RakatCounter, standingCalibration, classifyPose } from "../web/rakat/counter.mjs";
+import { RakatCounter, standingCalibration, adaptiveCalibration, classifyPose, detectOrientation, diagnosePlacement } from "../web/rakat/counter.mjs";
 import { LightingMonitor } from "../web/rakat/lighting.mjs";
 
 async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false, completedRakat = 0 } = {}) {
@@ -17,6 +17,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   let pixelValue = 128;
   let samplingError = false;
   let samples = 0;
+  let poseResults = [];
   const brightnessRequests = [];
   const classes = new Set();
   const canvas = {
@@ -30,7 +31,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   };
   const detector = {
     close() { closed++; },
-    detectForVideo() { return { landmarks: [] }; },
+    detectForVideo() { return { landmarks: poseResults }; },
   };
   const modelPromise = new Promise(resolve => { resolveModel = resolve; });
   const cameraPromise = new Promise(resolve => { resolveCamera = resolve; });
@@ -72,7 +73,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
     console: { error() {} },
   });
   const counterModule = new vm.SyntheticModule(
-    ["RakatCounter", "standingCalibration", "classifyPose"],
+    ["RakatCounter", "standingCalibration", "classifyPose", "adaptiveCalibration", "detectOrientation", "diagnosePlacement"],
     function () {
       this.setExport("RakatCounter", class extends RakatCounter {
         constructor(...args) {
@@ -82,6 +83,9 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
       });
       this.setExport("standingCalibration", standingCalibration);
       this.setExport("classifyPose", classifyPose);
+      this.setExport("adaptiveCalibration", adaptiveCalibration);
+      this.setExport("detectOrientation", detectOrientation);
+      this.setExport("diagnosePlacement", diagnosePlacement);
     }, { context },
   );
   const mediaModule = new vm.SyntheticModule(["FilesetResolver", "PoseLandmarker"], function () {
@@ -102,6 +106,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   return {
     element, tracks, detector, document, window, globalListeners, module, classes, brightnessRequests,
     setPixels: value => { pixelValue = value; },
+    setPoses: value => { poseResults = value; },
     failSampling: () => { samplingError = true; },
     samples: () => samples,
     closed: () => closed,
@@ -146,6 +151,111 @@ test("permission denial and insecure contexts are visible, with no dangling mode
   app.window.isSecureContext = false;
   await app.click("start");
   assert.match(app.element("status").textContent, /HTTPS/);
+});
+
+function standingPose() {
+  const pose = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.99 }));
+  for (const [indices, y] of [[[0], 0.1], [[11, 12], 0.24], [[23, 24], 0.5], [[25, 26], 0.7], [[27, 28], 0.9]]) {
+    for (const index of indices) pose[index].y = y;
+  }
+  return pose;
+}
+
+test("calibration completion immediately labels tracking active", async () => {
+  const app = await harness();
+  app.setPoses([standingPose()]);
+  await app.click("start");
+  for (let time = 100; time <= 1600; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  assert.match(app.element("status").textContent, /Calibrated/);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
+});
+
+test("camera with no initial frames warns after 1500ms and requires full calibration on recovery", async () => {
+  const app = await harness();
+  await app.click("start");
+  app.element("video").readyState = 0;
+  app.frame(100);
+  app.frame(1600);
+  assert.doesNotMatch(app.element("status").textContent, /frames stopped/);
+  app.frame(1601);
+  assert.match(app.element("status").textContent, /frames stopped.*Calibration is on hold/);
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+  app.setPoses([standingPose()]);
+  app.element("video").readyState = 2;
+  for (let time = 1700; time < 3200; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  app.element("video").currentTime++;
+  app.frame(3200);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+});
+
+test("frozen calibrated video pauses without advancing counts", async () => {
+  const app = await harness();
+  app.setPoses([standingPose()]);
+  await app.click("start");
+  for (let time = 100; time <= 1700; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  app.frame(3200);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  app.frame(3201);
+  assert.match(app.element("status").textContent, /Camera frames stopped/);
+  assert.match(app.element("session-state").textContent, /Tracking paused/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
+});
+
+test("a calibration frame gap discards partial standing dwell before recovery", async () => {
+  const app = await harness();
+  app.setPoses([standingPose()]);
+  await app.click("start");
+  for (let time = 100; time <= 900; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  app.frame(2401);
+  assert.match(app.element("status").textContent, /Calibration is on hold/);
+  for (let time = 2500; time <= 3900; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  app.element("video").currentTime++;
+  app.frame(4000);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+});
+
+test("multiple people cannot calibrate or advance a calibrated session", async () => {
+  const app = await harness();
+  app.setPoses([standingPose(), standingPose()]);
+  await app.click("start");
+  for (let time = 100; time <= 1700; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  assert.match(app.element("status").textContent, /one full body/);
+  app.setPoses([standingPose()]);
+  for (let time = 1800; time <= 3400; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  app.setPoses([standingPose(), standingPose()]);
+  for (let time = 3500; time <= 4500; time += 100) {
+    app.element("video").currentTime++;
+    app.frame(time);
+  }
+  assert.match(app.element("session-state").textContent, /Tracking paused/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
 });
 
 test("stopping camera retains estimated totals and labels them as not tracking", async () => {

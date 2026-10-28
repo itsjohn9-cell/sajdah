@@ -13,6 +13,9 @@
   Stop; zero estimates are explicitly labeled.
 - Before acquisition and after Stop/error, the video is hidden and a camera-off
   placeholder replaces native WebView video controls.
+- The review shortcut opens the feedback details and offsets the anchor below
+  sticky results. Android permits same-document fragments without allowing
+  arbitrary navigation; its policy link opens externally.
 - Verify on the affected Android phone that the results, history, restart/undo
   controls and feedback form are reachable with one-finger scrolling. Check
   small screens, landscape and enlarged text, and confirm Back releases camera.
@@ -57,6 +60,12 @@ camera tracks and model results; it never accesses a personal camera.
 
 - No permission request before an explicit Start.
 - Blank stream never counts and cannot pass calibration.
+- Calibration immediately changes the summary to active when it completes.
+- No initial video frames for more than 1500 ms show a calibration-on-hold
+  warning. Recovery requires a fresh 1.5-second stable standing calibration.
+- Frozen calibrated video pauses after more than 1500 ms, without new counts.
+- Calibration gaps discard partial standing dwell; multiple detected people
+  prevent calibration and pause an active session rather than choose a person.
 - Stop releases tracks, closes detector and clears preview.
 - Late model resolution after Stop closes the late detector.
 - Late camera resolution after cancellation stops all late tracks.
@@ -115,6 +124,14 @@ layout on small screens and manual brightness messaging. No flashing is used.
 - Local storage failure must not display success or attempt an upload.
 - Upload failure retains the local copy and explains recovery.
 - Export excludes the sample; submission never adjusts qaza or live counts.
+- Native feedback export offers selectable JSON without uploads or downloads,
+  including at the 100-report save limit. Browser export retains file download
+  and also offers selectable JSON. Invalid stored feedback clears stale export
+  text and shows an error without overwriting storage.
+- On a physical Android device, check the review shortcut opens the form below
+  the sticky header, the privacy link opens a browser, and long-press/select-all/
+  copy preserves exported JSON. These native interactions are not established
+  by the JS harness or an Android build.
 
 Browser checks confirmed consent-off submission stayed local and a simulated
 quota/storage failure displayed failure rather than success. The exact local

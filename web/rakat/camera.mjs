@@ -1,4 +1,4 @@
-import { RakatCounter, standingCalibration, classifyPose } from "./counter.mjs";
+import { RakatCounter, standingCalibration, adaptiveCalibration, classifyPose, detectOrientation, diagnosePlacement } from "./counter.mjs";
 import { LightingMonitor } from "./lighting.mjs";
 
 export function feedbackSnapshot() {
@@ -29,6 +29,7 @@ let calibrationSince = null;
 let baseline = null;
 let lastVideoTime = -1;
 let lastInference = 0;
+let frameWaitSince = null;
 let sessionId = crypto.randomUUID();
 let interruptions = 0;
 let firstObservation = null;
@@ -44,6 +45,46 @@ let lightingMonitor = new LightingMonitor();
 let lastLightSample = null;
 let lightingFailed = false;
 let screenLight = false;
+let orientation = "unknown";
+let devicePitch = null;
+let deviceRoll = null;
+let lastPoseTime = 0;
+
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("deviceorientation", event => {
+    if (event && Number.isFinite(event.beta)) {
+      devicePitch = event.beta;
+      deviceRoll = event.gamma || 0;
+      orientation = detectOrientation(event.beta, event.gamma);
+    }
+  });
+}
+
+function getSensorData() {
+  if (typeof window !== "undefined" && window.SijdaSensors) {
+    try {
+      const prox = window.SijdaSensors.getProximity();
+      const lux = window.SijdaSensors.getLux();
+      const hasProx = window.SijdaSensors.hasProximity();
+      return {
+        proximityDistance: prox,
+        proximity: hasProx && prox >= 0 && prox <= 5.0,
+        lux: lux >= 0 ? lux : null,
+      };
+    } catch (e) {
+      console.warn("Sensor read failed", e);
+    }
+  }
+  return {};
+}
+
+function checkOpticalProximity(points) {
+  if (!points || !points[0]) return false;
+  const nose = points[0];
+  if (Number.isFinite(nose.z) && nose.z < -0.3) return true;
+  if (points[7] && points[8] && Math.abs(points[7].x - points[8].x) > 0.4) return true;
+  return false;
+}
 
 function setScreenLight(enabled) {
   screenLight = enabled;
@@ -202,6 +243,7 @@ async function start() {
     starting = false;
     lastVideoTime = -1;
     lastInference = 0;
+    frameWaitSince = null;
     lastLightSample = null;
     lightingFailed = false;
     lightingMonitor = new LightingMonitor();
@@ -228,10 +270,12 @@ function beginCalibration() {
 function loop(time) {
   if (!stream || !detector) return;
   try {
-    if (lastInference > 0 && time - lastInference > 1500) {
+    frameWaitSince ??= time;
+    if (time - (lastInference || frameWaitSince) > 1500) {
       if (calibrating) {
         calibrationSince = null;
         baseline = null;
+        status("Camera frames stopped. Calibration is on hold. Check the preview or restart the camera.");
       } else if (!counter.paused) {
         counter.pause("Camera frames stopped. Restart the current rakat after checking the preview.");
         status(counter.reason);
@@ -245,14 +289,26 @@ function loop(time) {
       const result = detector.detectForVideo(video, time);
       const points = result.landmarks.length === 1 ? result.landmarks[0] : null;
       if (calibrating) {
-        const sample = standingCalibration(points);
+        const sample = standingCalibration(points, { allowAdaptive: true, orientation, pitch: devicePitch });
         const stable = sample && (!baseline ||
-          (Math.abs(sample.hipY - baseline.hipY) < 0.03 &&
-           Math.abs(sample.height - baseline.height) < 0.04));
+          (sample.mode === baseline.mode &&
+           (sample.mode === "mat" ||
+            (Number.isFinite(sample.hipY) && Math.abs(sample.hipY - (baseline.hipY ?? sample.hipY)) < 0.05) ||
+            (Number.isFinite(sample.headY) && Math.abs(sample.headY - (baseline.headY ?? sample.headY)) < 0.05))));
         if (!stable) {
           calibrationSince = null;
           baseline = null;
-          status("Setup: one full body must be visible and upright. Adjust distance, camera tilt or lighting.");
+          let guidance = "";
+          const diag = diagnosePlacement({
+            points,
+            numPoses: result.landmarks.length,
+            lightingCondition: lightingMonitor.condition,
+            orientation,
+            pitch: devicePitch,
+            timeSinceLastDetection: time - lastPoseTime,
+          });
+          if (diag) guidance = ` Fix: ${diag.fix}`;
+          status(`Setup: one full body must be visible and upright. Adjust distance, camera tilt or lighting.${guidance}`);
         } else {
           if (calibrationSince === null) { calibrationSince = time; baseline = sample; }
           status("Standing visible. Hold still for calibration...");
@@ -260,15 +316,39 @@ function loop(time) {
             calibration = baseline;
             calibrating = false;
             status("Calibrated. Stand upright to begin tracking.");
+            render();
           }
         }
       } else if (!counter.paused && !counter.complete) {
-        const posture = classifyPose(points, calibration);
+        if (points) lastPoseTime = time;
+        const sensorData = getSensorData();
+        const opticalProx = checkOpticalProximity(points);
+        const context = {
+          ...sensorData,
+          opticalProximity: opticalProx,
+          orientation,
+          pitch: devicePitch,
+          allowPartial: true,
+        };
+        const posture = classifyPose(points, calibration, context);
         counter.observe(posture, time);
         recordTransition(time, posture);
-        status(counter.paused ? counter.reason :
+        let guidance = "";
+        if (counter.paused || posture === "unknown" || time - lastPoseTime > 1200) {
+          const diag = diagnosePlacement({
+            points,
+            numPoses: result.landmarks.length,
+            lightingCondition: lightingMonitor.condition,
+            orientation,
+            pitch: devicePitch,
+            timeSinceLastDetection: time - lastPoseTime,
+            calibration,
+          });
+          if (diag) guidance = ` Fix: ${diag.fix}`;
+        }
+        status(counter.paused ? `${counter.reason}${guidance}` :
           counter.complete ? "Session target reached. Stop camera and review estimates." :
-          posture === "unknown" ? "Tracking uncertain. No posture is being assumed." :
+          posture === "unknown" ? `Tracking uncertain. No posture is being assumed.${guidance}` :
           phaseLabels[counter.phase]);
         render();
         if (counter.complete) {
