@@ -13,8 +13,8 @@ Android package: `app.sijda.sijda`
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Apache-2.0 runtime license included; official model-card license verified |
 | Setup and feature limitations | [README](../README.md) | Includes model download/checksum instructions |
-| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.4/code 5 built and signed; ready for upload |
-| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.4/code 5 for physical-device testing; not committed |
+| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.5/code 6 built and signed; publishing to Play Console |
+| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.5/code 6 for physical-device testing; not committed |
 
 ## Privacy-policy hosting
 
@@ -64,16 +64,16 @@ Console displayed 178 countries during this update, unlike the initial four.
 No geography settings were changed; the owner should verify the intended
 selection in Console.
 
-### Resilient prostration-place (mat) tracking and non-pausing prayer engine
+### Resilient prostration-place (mat) tracking and namaz prayer scenarios update
 
-Version `0.1.4` / code `5`, release
-`0.1.4 (5) - resilient prostration tracking and non-pausing prayer flow`,
-eliminates false pauses and spurious error messages during prayer. It introduces
-adaptive prostration-place tracking that recognizes lens occlusion and extreme
-proximity as prostration rather than camera loss or lighting failure, tolerates
-floor camera angles where feet or bowing are partially cut, and uses a
-resilient double-sajdah pulse algorithm to count rakats smoothly.
-Validation passed: 58 Node tests, 23 Flutter tests, Flutter analysis, web
+Version `0.1.5` / code `6`, release
+`0.1.5 (6) - resilient prostration tracking and namaz prayer scenarios`,
+incorporates comprehensive academic/industry research on prayer tracking,
+features an automated 9-scenario prayer simulation suite (Fajr 2-rakat, Maghrib
+3-rakat with middle/final tashahhud, 4-rakat progression, prolonged Dua in
+sujud, optical occlusion fallback, and floor incline angles), and provides
+smooth, uninterrupted counting from the prostration spot.
+Validation passed: 67 Node tests, 23 Flutter tests, Flutter analysis, web
 build, and signed Android release AAB/APK builds.
 
 ## Before closed-test rollout

@@ -112,7 +112,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'Adaptive prostration tracking: recognizes close proximity and lens occlusion under prostration place as sajdah, eliminates false dim-light warnings during prayer, and tolerates floor camera angles without pausing.'
+        text: 'Enhanced prostration tracking and prayer cycle resilience: recognizes close proximity and optical occlusion at the prostration spot, handles 2/3/4 rakat sequences and middle/final tashahhud smoothly, and eliminates false pauses during prayer.'
       }
     ];
 
