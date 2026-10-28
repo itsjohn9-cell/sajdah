@@ -1,4 +1,4 @@
-# Sijda store readiness
+# Sajdah store readiness
 
 Publisher: **MJ.**
 Public support/privacy/deletion email: **fehmatics@gmail.com**

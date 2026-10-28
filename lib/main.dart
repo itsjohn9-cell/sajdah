@@ -26,16 +26,64 @@ class _SijdaAppState extends State<SijdaApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sijda',
+      title: 'Sajdah',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF176B58),
-          surface: const Color(0xFFF8F7F2),
+          seedColor: const Color(0xFF0F4C3A),
+          primary: const Color(0xFF0F4C3A),
+          secondary: const Color(0xFFC5A059),
+          surface: const Color(0xFFFBF9F5),
         ),
+        scaffoldBackgroundColor: const Color(0xFFFBF9F5),
         useMaterial3: true,
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFFBF9F5),
+          foregroundColor: Color(0xFF0F4C3A),
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Color(0xFF0F4C3A),
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
+        cardTheme: CardThemeData(
+          color: Colors.white,
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFEBE6DC), width: 1),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF0F4C3A),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            elevation: 0,
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFEBE6DC)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFEBE6DC)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF0F4C3A), width: 1.5),
+          ),
         ),
       ),
       home: FutureBuilder<SijdaStore>(

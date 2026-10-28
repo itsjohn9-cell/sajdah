@@ -268,6 +268,14 @@ function render() {
         : calibrating ? "Setup in progress. Counting starts only after calibration."
           : counter.paused ? "Tracking paused. No new counts are being added."
             : "Tracking active. Counts below are estimates; review after your test.";
+  if (typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
+    const badges = document.querySelectorAll(".flow-badge");
+    const phaseIndex = {
+      standing: 0, bow: 1, upright: 2, firstSajdah: 3,
+      between: 4, secondSajdah: 5, exit: 4,
+    }[counter.phase] ?? 0;
+    badges.forEach((b, i) => b.classList.toggle("active", i === phaseIndex));
+  }
 }
 
 function stop(message = "Camera stopped. Review your estimates before continuing.") {

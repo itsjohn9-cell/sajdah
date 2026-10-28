@@ -20,7 +20,7 @@ class TasbeehPage extends StatelessWidget {
     final complete = guided && store.guidedComplete;
     final enabled = !store.saving && !complete;
     return ColoredBox(
-      color: const Color(0xFFF8F8F9),
+      color: const Color(0xFFFBF9F5),
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           child: ConstrainedBox(
@@ -36,7 +36,7 @@ class TasbeehPage extends StatelessWidget {
                       foregroundColor: _ink,
                       selectedForegroundColor: tasbeehPlum,
                       selectedBackgroundColor: Colors.white,
-                      backgroundColor: const Color(0xFFE9E9EC),
+                      backgroundColor: const Color(0xFFEBE6DC),
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       side: BorderSide.none,
                       shape: RoundedRectangleBorder(
@@ -113,9 +113,20 @@ class TasbeehPage extends StatelessWidget {
                               width: math.min(280, constraints.maxWidth - 64),
                               height: math.min(280, constraints.maxWidth - 64),
                               child: DecoratedBox(
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Color(0xFFEDEDEF),
+                                  color: Colors.white,
+                                  border: Border.all(
+                                    color: const Color(0xFFC5A059),
+                                    width: 3.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF0F4C3A).withValues(alpha: 0.08),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.all(24),

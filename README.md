@@ -1,8 +1,7 @@
-# Sijda
+# Sajdah
 
-An offline-first Islamic companion built with Flutter for Android, iOS and web.
-This is the first functional foundation, not a complete religious reference or
-a production-ready sensor tracker.
+An offline-first Islamic companion built with Flutter for Android, iOS, and web, featuring prostration detection, prayer progression tracking, Tasbeeh counter, and Qaza records.
+Direct APK Download: [Download Latest Sajdah APK](https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk)
 
 ## Working now
 

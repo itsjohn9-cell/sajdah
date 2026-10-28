@@ -35,7 +35,7 @@ for (const cand of flutterCandidates) {
 }
 
 console.log('========================================================');
-console.log('       🚀 SIJDA ONE-CLICK UNIFIED DEPLOYMENT            ');
+console.log('       🚀 SAJDAH ONE-CLICK UNIFIED DEPLOYMENT           ');
 console.log('========================================================');
 console.log(`📦 App Version   : ${versionName} (Build Code ${versionCode})`);
 console.log(`🔨 Flutter Binary : ${flutterBin}`);
@@ -77,9 +77,9 @@ try {
   console.log('🎉 UNIFIED DEPLOYMENT COMPLETED SUCCESSFULLY!           ');
   console.log('========================================================');
   console.log('📲 Google Play Track: Closed Testing (Alpha)');
-  console.log('🐙 GitHub Release   : https://github.com/itsjohn9-cell/sijda/releases/tag/v' + versionName);
+  console.log(`🐙 GitHub Release   : https://github.com/itsjohn9-cell/sajdah/releases/tag/v${versionName}`);
   console.log('⬇️ PERMANENT DIRECT APK DOWNLOAD LINK:');
-  console.log('   https://github.com/itsjohn9-cell/sijda/releases/latest/download/sijda-release.apk');
+  console.log('   https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk');
   console.log('========================================================\n');
 } catch (error) {
   console.error('\n❌ Deployment interrupted:', error.message);

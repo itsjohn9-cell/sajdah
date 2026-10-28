@@ -3,29 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Experimental automatic rakat counter</title>
+  <title>Sajdah - AI Prostration & Rakat Companion</title>
   <style>
-    :root { font: 16px system-ui, sans-serif; color: #233c34; background: #f8f7f2; }
+    :root {
+      font: 16px system-ui, -apple-system, sans-serif;
+      color: #142821;
+      background: #fbf9f5;
+      --primary: #0f4c3a;
+      --primary-light: #165b47;
+      --gold: #c5a059;
+      --gold-light: #e5c378;
+      --border: #e8e3d8;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 12px; }
-    h2 { font-size: 1.3rem; margin-top: 0; }
-    p { line-height: 1.45; }
-    button, select, input, textarea { font: inherit; padding: 12px; border: 1px solid #176b58;
-      border-radius: 10px; background: white; color: #174e40; min-height: 46px; }
-    button { cursor: pointer; }
-    button:disabled { opacity: .5; cursor: default; }
-    button.primary { background: #176b58; color: white; }
+    body { margin: 0; padding: 14px; background: #fbf9f5; }
+    h2 { font-size: 1.25rem; margin-top: 0; color: var(--primary); font-weight: 700; }
+    p { line-height: 1.5; }
+    button, select, input, textarea {
+      font: inherit; padding: 12px; border: 1px solid var(--border);
+      border-radius: 12px; background: white; color: var(--primary); min-height: 46px;
+      transition: all 0.2s ease;
+    }
+    button { cursor: pointer; font-weight: 600; }
+    button:disabled { opacity: .45; cursor: default; }
+    button.primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: white; border: none; font-weight: 600;
+      box-shadow: 0 4px 14px rgba(15, 76, 58, 0.2);
+    }
+    button.primary:hover:not(:disabled) { opacity: 0.95; transform: translateY(-1px); }
     .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
-    .preview { position: relative; background: #162a24; border-radius: 12px; overflow: hidden; }
-    video { width: 100%; height: 160px; display: block; object-fit: contain; transform: scaleX(-1); }
+    .preview {
+      position: relative; background: #0c1c16; border-radius: 16px;
+      overflow: hidden; border: 1.5px solid rgba(197, 160, 89, 0.3);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+    video { width: 100%; height: 175px; display: block; object-fit: contain; transform: scaleX(-1); }
     video[hidden] { display: none; }
-    #camera-placeholder { color: white; text-align: center; padding: 18px; margin: 0; }
-    #status { padding: 12px; background: #e4eee8; border-radius: 10px; min-height: 60px; }
-    #totals { font-size: 1.3rem; font-weight: 600; }
-    .warning { color: #7a411e; }
+    #camera-placeholder { color: #fbf9f5; text-align: center; padding: 24px; margin: 0; font-size: 0.95rem; }
+    #status {
+      padding: 14px; background: #eaf2ed; border-radius: 12px;
+      min-height: 56px; border: 1px solid #d4e5da; color: var(--primary); font-weight: 500;
+    }
+    #totals { font-size: 1.35rem; font-weight: 700; color: var(--primary); }
+    .warning { color: #8a481c; }
     ol { padding-left: 24px; }
     form { display: grid; gap: 12px; }
-    form label { display: grid; gap: 6px; }
+    form label { display: grid; gap: 6px; font-weight: 500; }
     input, select, textarea { max-width: 100%; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; }
     .consent { display: flex; align-items: flex-start; gap: 12px; }
@@ -34,34 +58,59 @@
     body.screen-light { min-height: 100vh; }
     .screen-light .preview video { max-height: 120px; }
     .screen-light .setup-info { display: none; }
-    .screen-light #status { background: white; border: 1px solid #176b58; }
-    #lighting-status, #screen-light-status { font-size: .9rem; }
-    .session-summary { position: sticky; top: 0; z-index: 2; background: #f8f7f2;
-      border-bottom: 2px solid #176b58; padding: 8px 0; }
+    .screen-light #status { background: white; border: 1px solid var(--primary); }
+    #lighting-status, #screen-light-status { font-size: .88rem; }
+    .session-summary {
+      position: sticky; top: 0; z-index: 2; background: #fbf9f5;
+      border-bottom: 2px solid var(--gold); padding: 10px 0;
+    }
     .session-summary p { margin: 4px 0; }
-    .session-summary #totals { font-size: 1.15rem; }
-    .session-summary #status { min-height: 0; padding: 8px; }
+    .session-summary #totals { font-size: 1.25rem; }
+    .session-summary #status { min-height: 0; padding: 10px 12px; }
     .screen-light .session-summary { background: white; }
-    summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
-    #history:empty::after { content: "No completed rakat estimated in this session."; }
+    summary { cursor: pointer; padding: 12px 0; font-weight: 600; color: var(--primary); }
+    #history:empty::after { content: "No completed rakat estimated in this session."; color: #6a7c73; }
     #history { margin: 8px 0; }
+    .namaz-flow-strip {
+      display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 12px 0;
+      scrollbar-width: none;
+    }
+    .flow-badge {
+      padding: 6px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+      background: white; border: 1px solid var(--border); color: #435b51; white-space: nowrap;
+    }
+    .flow-badge.active {
+      background: var(--primary); color: white; border-color: var(--primary);
+    }
     @media (max-width: 380px) {
       button, select { padding: 9px; }
-      .session-summary #totals { font-size: 1rem; }
+      .session-summary #totals { font-size: 1.05rem; }
     }
   </style>
 </head>
 <body>
+  <header style="text-align: center; margin-bottom: 12px;">
+    <h1 style="font-size: 1.45rem; margin: 0; color: #0f4c3a; letter-spacing: 0.5px;">Sajdah</h1>
+    <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: #c5a059; font-weight: 700; letter-spacing: 1.2px;">AI PROSTRATION & PRAYER COMPANION</p>
+  </header>
   <section class="session-summary" aria-label="Live session results">
     <p id="totals" aria-live="polite">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
     <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
     <p id="session-state">Not tracking. No completed rakat estimated yet.</p>
-    <a id="review-feedback" href="#feedback-section">Review / report this test</a>
+    <a id="review-feedback" href="#feedback-section" style="color: #0f4c3a; font-weight: 600;">Review / report this test</a>
   </section>
+  <div class="namaz-flow-strip" aria-label="Namaz prostration sequence">
+    <span class="flow-badge active">1. Qiyam (Stand)</span>
+    <span class="flow-badge">2. Ruku (Bow)</span>
+    <span class="flow-badge">3. Qaumah (Stand)</span>
+    <span class="flow-badge">4. Sajdah 1</span>
+    <span class="flow-badge">5. Jalsah (Sit)</span>
+    <span class="flow-badge">6. Sajdah 2</span>
+  </div>
   <p class="warning">Experimental estimates, not confirmation of prayer validity.</p>
   <details>
   <summary>Setup, limitations and privacy</summary>
-  <p><a href="https://itsjohn9-cell.github.io/sijda/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+  <p><a href="https://itsjohn9-cell.github.io/sajdah/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
     · Privacy/deletion: fehmatics@gmail.com</p>
   <p class="setup-info">Keep this page open with the screen on. Position the front camera so your
     head, hips, knees and feet stay visible, including on the floor.

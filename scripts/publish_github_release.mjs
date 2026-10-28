@@ -23,14 +23,16 @@ if (!fs.existsSync(apkSource)) {
   process.exit(1);
 }
 
-const releaseApk = path.join(apkDir, 'sijda-release.apk');
-const versionedApk = path.join(apkDir, `sijda-${tag}.apk`);
+const sajdahReleaseApk = path.join(apkDir, 'sajdah-release.apk');
+const sajdahVersionedApk = path.join(apkDir, `sajdah-${tag}.apk`);
+const legacySijdaApk = path.join(apkDir, 'sijda-release.apk');
 
-fs.copyFileSync(apkSource, releaseApk);
-fs.copyFileSync(apkSource, versionedApk);
+fs.copyFileSync(apkSource, sajdahReleaseApk);
+fs.copyFileSync(apkSource, sajdahVersionedApk);
+fs.copyFileSync(apkSource, legacySijdaApk);
 
 console.log('====================================================');
-console.log('       SIJDA - GITHUB RELEASES AUTO-PUBLISHER        ');
+console.log('       SAJDAH - GITHUB RELEASES AUTO-PUBLISHER      ');
 console.log('====================================================');
 console.log(`📦 Tag Name     : ${tag}`);
 console.log(`🔢 Version Name : ${versionName} (Build ${versionCode})`);
@@ -46,20 +48,24 @@ try {
     exists = false;
   }
 
+  const assets = `"${sajdahReleaseApk}" "${sajdahVersionedApk}" "${legacySijdaApk}"`;
+
   if (exists) {
     console.log(`ℹ Release ${tag} exists. Uploading/overwriting assets...`);
-    execSync(`gh release upload ${tag} "${releaseApk}" "${versionedApk}" --clobber`, { stdio: 'inherit' });
+    execSync(`gh release upload ${tag} ${assets} --clobber`, { stdio: 'inherit' });
   } else {
     console.log(`🚀 Creating GitHub Release ${tag}...`);
-    const notes = `### Sijda ${tag} (Build ${versionCode})
+    const notes = `### Sajdah ${tag} (Build ${versionCode})
 - Automated Release with signed Android APK assets.
+- Modernized Islamic theme, streamlined prostration detection & prayer progression flow.
 
 ### Direct Download Links:
-- **[Download Latest APK (Direct Link)](https://github.com/itsjohn9-cell/sijda/releases/latest/download/sijda-release.apk)**
-- **[Download Sijda ${tag} APK](https://github.com/itsjohn9-cell/sijda/releases/download/${tag}/sijda-${tag}.apk)**`;
+- **[Download Latest Sajdah APK (Direct Link)](https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk)**
+- **[Download Sajdah ${tag} APK](https://github.com/itsjohn9-cell/sajdah/releases/download/${tag}/sajdah-${tag}.apk)**
+- *(Legacy download link: [sijda-release.apk](https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sijda-release.apk))*`;
 
     execSync(
-      `gh release create ${tag} "${releaseApk}" "${versionedApk}" --title "Sijda ${tag} (Build ${versionCode})" --notes "${notes}" --latest`,
+      `gh release create ${tag} ${assets} --title "Sajdah ${tag} (Build ${versionCode})" --notes "${notes}" --latest`,
       { stdio: 'inherit' }
     );
   }
@@ -67,12 +73,11 @@ try {
   console.log('====================================================');
   console.log('🎉 SUCCESSFULLY PUBLISHED TO GITHUB RELEASES!       ');
   console.log('====================================================');
-  console.log(`🌐 Release Page : https://github.com/itsjohn9-cell/sijda/releases/tag/${tag}`);
-  console.log(`⬇ Permanent Link: https://github.com/itsjohn9-cell/sijda/releases/latest/download/sijda-release.apk`);
-  console.log(`⬇ Version Link  : https://github.com/itsjohn9-cell/sijda/releases/download/${tag}/sijda-${tag}.apk`);
+  console.log(`🌐 Release Page : https://github.com/itsjohn9-cell/sajdah/releases/tag/${tag}`);
+  console.log(`⬇ Permanent Link: https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk`);
+  console.log(`⬇ Version Link  : https://github.com/itsjohn9-cell/sajdah/releases/download/${tag}/sajdah-${tag}.apk`);
   console.log('====================================================\n');
 } catch (err) {
   console.error('❌ Failed to publish release to GitHub:', err.message);
   process.exit(1);
 }
-
