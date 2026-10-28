@@ -178,9 +178,9 @@ class TasbeehPage extends StatelessWidget {
                             const SizedBox(height: 12),
                             Text(
                               guided
-                                  ? '${store.dhikr} · ${store.stageCount}/${store.stageTarget}\n'
-                                        '${store.guidedCount}/100 total'
-                                  : 'No session target',
+                                  ? 'Tasbih of Sayyidah Fatimah al-Zahra (sa)\n'
+                                        '${store.dhikr} · ${store.stageCount}/${store.stageTarget} · ${store.guidedCount}/100 total'
+                                  : 'Free count · No session target',
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: _ink, height: 1.5),
                             ),

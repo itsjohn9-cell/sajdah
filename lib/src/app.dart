@@ -472,7 +472,7 @@ class _SijdaHomeState extends State<SijdaHome> {
                 children: [
                   _stepPill('1. Qiyam', true),
                   _stepArrow(),
-                  _stepPill('2. Ruku', true),
+                  _stepPill('2. Ruku\'', true),
                   _stepArrow(),
                   _stepPill('3. Qaumah', true),
                   _stepArrow(),
@@ -667,11 +667,12 @@ class _SijdaHomeState extends State<SijdaHome> {
   Widget _qaza(SijdaStore store) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _heading('Qaza tracker', 'One step at a time, at your own pace.'),
+      _heading('Qada / Qaza tracker', 'One step at a time, at your own pace.'),
       const Text(
-        'Enter your own remaining balances. We do not calculate religious '
-        'obligations or infer missed worship from your age. '
-        'Ask a trusted scholar if you need guidance.',
+        'Enter your remaining qada (missed) prayers and fasts. '
+        'In accordance with Islamic jurisprudence (Ayatullah al-Uzma al-Sistani, Islamic Laws Ruling 1370+), '
+        'a person must perform the qada of obligatory prayers and fasts missed. '
+        'This tracker is a personal aid to keep count at your own pace.',
       ),
       const SizedBox(height: 16),
       for (final entry in store.balances.entries)
