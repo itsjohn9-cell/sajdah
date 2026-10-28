@@ -44,40 +44,58 @@ console.log('========================================================\n');
 try {
   // Step 1: Run Tests
   if (!skipTests) {
-    console.log('🧪 [1/4] Running automated Node & Flutter regression tests...');
+    console.log('🧪 [1/5] Running automated Node & Flutter regression tests...');
     execSync('npm test', { stdio: 'inherit' });
     execSync(`${flutterBin} test`, { stdio: 'inherit' });
     console.log('✔ All tests passed successfully!\n');
   } else {
-    console.log('⏩ [1/4] Skipping tests (--skip-tests passed)...\n');
+    console.log('⏩ [1/5] Skipping tests (--skip-tests passed)...\n');
   }
 
   // Step 2: Build AAB and APK
   if (!skipBuild) {
-    console.log('🔨 [2/4] Building Release App Bundle (AAB) & APK...');
+    console.log('🔨 [2/5] Building Release App Bundle (AAB) & APK...');
     console.log('   -> Building AAB...');
     execSync(`${flutterBin} build appbundle --release --build-name=${versionName} --build-number=${versionCode}`, { stdio: 'inherit' });
     console.log('   -> Building APK...');
     execSync(`${flutterBin} build apk --release --build-name=${versionName} --build-number=${versionCode}`, { stdio: 'inherit' });
     console.log('✔ Builds complete!\n');
   } else {
-    console.log('⏩ [2/4] Skipping build step (--skip-build passed)...\n');
+    console.log('⏩ [2/5] Skipping build step (--skip-build passed)...\n');
   }
 
   // Step 3: Google Play Console Release
-  console.log('📱 [3/4] Uploading & Publishing to Google Play Console...');
+  console.log('📱 [3/5] Uploading & Publishing to Google Play Console...');
   execSync('node scripts/publish_play_console.mjs', { stdio: 'inherit' });
   console.log('✔ Published to Google Play!\n');
 
   // Step 4: GitHub Releases Upload
-  console.log('🐙 [4/4] Uploading APK to GitHub Releases...');
+  console.log('🐙 [4/5] Uploading APK to GitHub Releases...');
   execSync('node scripts/publish_github_release.mjs', { stdio: 'inherit' });
+  console.log('✔ Uploaded APKs to GitHub Releases!\n');
 
-  console.log('\n========================================================');
+  // Step 5: Git Push to GitHub main branch
+  console.log('🌿 [5/5] Synchronizing latest project updates to GitHub main branch...');
+  try {
+    const status = execSync('git status --porcelain').toString().trim();
+    if (status) {
+      console.log('   -> Staging and committing pending project changes...');
+      execSync('git add -A', { stdio: 'inherit' });
+      execSync(`git commit -m "release: Sajdah v${versionName} (Build ${versionCode})"`, { stdio: 'inherit' });
+    }
+    console.log('   -> Pushing to origin main...');
+    execSync('git push origin main', { stdio: 'inherit' });
+    console.log('✔ GitHub main branch is completely up to date!\n');
+  } catch (gitErr) {
+    console.warn('⚠️ Git push to main warning:', gitErr.message);
+  }
+
+  console.log('========================================================');
   console.log('🎉 UNIFIED DEPLOYMENT COMPLETED SUCCESSFULLY!           ');
   console.log('========================================================');
   console.log('📲 Google Play Track: Closed Testing (Alpha)');
   console.log(`🐙 GitHub Release   : https://github.com/itsjohn9-cell/sajdah/releases/tag/v${versionName}`);
+  console.log('🌿 GitHub Main Code : https://github.com/itsjohn9-cell/sajdah/tree/main');
   console.log('⬇️ PERMANENT DIRECT APK DOWNLOAD LINK:');
   console.log('   https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk');
   console.log('========================================================\n');
