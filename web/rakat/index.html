@@ -17,7 +17,9 @@
     button.primary { background: #176b58; color: white; }
     .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
     .preview { position: relative; background: #162a24; border-radius: 12px; overflow: hidden; }
-    video { width: 100%; max-height: 240px; display: block; object-fit: contain; transform: scaleX(-1); }
+    video { width: 100%; height: 160px; display: block; object-fit: contain; transform: scaleX(-1); }
+    video[hidden] { display: none; }
+    #camera-placeholder { color: white; text-align: center; padding: 18px; margin: 0; }
     #status { padding: 12px; background: #e4eee8; border-radius: 10px; min-height: 60px; }
     #totals { font-size: 1.3rem; font-weight: 600; }
     .warning { color: #7a411e; }
@@ -34,10 +36,31 @@
     .screen-light .setup-info { display: none; }
     .screen-light #status { background: white; border: 1px solid #176b58; }
     #lighting-status, #screen-light-status { font-size: .9rem; }
+    .session-summary { position: sticky; top: 0; z-index: 2; background: #f8f7f2;
+      border-bottom: 2px solid #176b58; padding: 8px 0; }
+    .session-summary p { margin: 4px 0; }
+    .session-summary #totals { font-size: 1.15rem; }
+    .session-summary #status { min-height: 0; padding: 8px; }
+    .screen-light .session-summary { background: white; }
+    summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+    #history:empty::after { content: "No completed rakat estimated in this session."; }
+    #history { margin: 8px 0; }
+    @media (max-width: 380px) {
+      button, select { padding: 9px; }
+      .session-summary #totals { font-size: 1rem; }
+    }
   </style>
 </head>
 <body>
-  <h2>Automatic counting · experimental</h2>
+  <section class="session-summary" aria-label="Live session results">
+    <p id="totals" aria-live="polite">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
+    <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
+    <p id="session-state">Not tracking. No completed rakat estimated yet.</p>
+    <a href="#feedback-section">Review / report this test</a>
+  </section>
+  <p class="warning">Experimental estimates, not confirmation of prayer validity.</p>
+  <details>
+  <summary>Setup, limitations and privacy</summary>
   <p><a href="https://itsjohn9-cell.github.io/sijda/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
     · Privacy/deletion: fehmatics@gmail.com</p>
   <p class="setup-info">Keep this page open with the screen on. Position the front camera so your
@@ -46,27 +69,31 @@
   <p class="warning">Estimates only. Not validated for prayer use or all phones,
     clothing or mobility needs. Only standard standing sequences are supported.
     Review results; this does not determine prayer validity.</p>
+  </details>
   <div class="controls">
     <label for="target">Session target</label>
     <select id="target"><option value="2">2 rakat</option><option value="3">3 rakat</option><option value="4">4 rakat</option></select>
     <button id="start" class="primary">Enable front camera</button>
     <button id="stop" disabled>Stop camera</button>
   </div>
-  <div class="preview"><video id="video" playsinline muted aria-label="Mirrored front camera preview"></video></div>
+  <div class="preview">
+    <p id="camera-placeholder">Camera off. Tap Enable front camera to begin setup.</p>
+    <video id="video" hidden playsinline muted disablepictureinpicture aria-label="Mirrored front camera preview"></video>
+  </div>
+  <h2>Session results</h2>
+  <ol id="history" aria-label="Estimated rakat history"></ol>
+  <p>Review these estimates before leaving this screen. Leaving clears the automatic session.</p>
   <div class="controls">
     <button id="screen-light" aria-pressed="false" disabled>Turn screen light on</button>
   </div>
   <p id="screen-light-status" role="status">Screen light off. This can help nearby, but cannot guarantee tracking in darkness. Uses extra battery.</p>
   <p id="lighting-status" class="warning" role="status">Lighting check off. Camera frames are sampled only on-device while tracking.</p>
-  <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
-  <p id="totals">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
   <div class="controls">
     <button id="calibrate" disabled>Calibrate standing position</button>
     <button id="resume" disabled>Restart current rakat</button>
     <button id="undo" disabled>Undo last rakat</button>
     <button id="reset">New automatic session</button>
   </div>
-  <ol id="history" aria-label="Estimated rakat history"></ol>
   <p class="setup-info">Start standing for calibration. The tracker then expects standing → ruku →
     standing → sajdah → sitting → sajdah → sitting/standing.
     A rakat estimate is added only after leaving the second sajdah.</p>
@@ -76,7 +103,7 @@
     page. Sessions are not saved and do not change qaza balances. Motion sensors
     cannot measure your body while the phone is stationary; proximity is not
     generally available in browsers.</p>
-  <details>
+  <details id="feedback-section">
     <summary>Report test results / placement feedback</summary>
     <p>Stop the camera before filling this in. Counts and a limited posture-transition
       log (no images or raw body landmarks) are captured when you submit.

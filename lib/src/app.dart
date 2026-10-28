@@ -255,9 +255,29 @@ class _SijdaHomeState extends State<SijdaHome> {
     children: [
       _heading(
         'Rakat counter',
-        'Experimental camera tracking, with manual counting below.',
+        'Choose camera-assisted tracking or use the manual counter below.',
       ),
-      const AutoRakat(),
+      FilledButton.icon(
+        key: const Key('open-automatic-rakat'),
+        onPressed: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (context) => Scaffold(
+              appBar: AppBar(title: const Text('Automatic rakat')),
+              body: const SafeArea(child: AutoRakat()),
+            ),
+          ),
+        ),
+        icon: const Icon(Icons.videocam_outlined),
+        label: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text('Open automatic counter'),
+        ),
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'Opens a dedicated screen with live estimates and tracking status. '
+        'Review or report results before leaving; automatic sessions are not saved.',
+      ),
       const SizedBox(height: 24),
       Text('Manual counter', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 8),

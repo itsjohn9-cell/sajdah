@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { RakatCounter, standingCalibration, classifyPose } from "../web/rakat/counter.mjs";
 import { LightingMonitor } from "../web/rakat/lighting.mjs";
 
-async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false } = {}) {
+async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false, completedRakat = 0 } = {}) {
   const elements = new Map();
   const listeners = new Map();
   const tracks = [{ ended: false, stop() { this.ended = true; }, addEventListener() {} }];
@@ -74,7 +74,12 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   const counterModule = new vm.SyntheticModule(
     ["RakatCounter", "standingCalibration", "classifyPose"],
     function () {
-      this.setExport("RakatCounter", RakatCounter);
+      this.setExport("RakatCounter", class extends RakatCounter {
+        constructor(...args) {
+          super(...args);
+          this.rakats = Array.from({ length: completedRakat }, () => ({ sajdahs: 2 }));
+        }
+      });
       this.setExport("standingCalibration", standingCalibration);
       this.setExport("classifyPose", classifyPose);
     }, { context },
@@ -111,8 +116,13 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 test("start, blank inference, stop and no automatic camera acquisition", async () => {
   const app = await harness();
   assert.equal(app.element("video").srcObject, null);
+  assert.equal(app.element("video").hidden, true);
+  assert.equal(app.element("camera-placeholder").hidden, false);
   await app.click("start");
   assert.ok(app.element("video").srcObject);
+  assert.equal(app.element("video").hidden, false);
+  assert.equal(app.element("camera-placeholder").hidden, true);
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
   app.element("video").currentTime = 1;
   app.frame(100);
   assert.match(app.element("status").textContent, /one full body/);
@@ -121,17 +131,32 @@ test("start, blank inference, stop and no automatic camera acquisition", async (
   assert.ok(app.tracks.every(track => track.ended));
   assert.equal(app.closed(), 1);
   assert.equal(app.element("video").srcObject, null);
+  assert.equal(app.element("video").hidden, true);
+  assert.equal(app.element("camera-placeholder").hidden, false);
+  assert.match(app.element("session-state").textContent, /Not tracking/);
 });
 
 test("permission denial and insecure contexts are visible, with no dangling model", async () => {
   const app = await harness({ denied: true });
   await app.click("start");
   assert.match(app.element("status").textContent, /Permission denied/);
+  assert.match(app.element("session-state").textContent, /Not tracking/);
   assert.equal(app.closed(), 1);
   assert.equal(app.element("start").disabled, false);
   app.window.isSecureContext = false;
   await app.click("start");
   assert.match(app.element("status").textContent, /HTTPS/);
+});
+
+test("stopping camera retains estimated totals and labels them as not tracking", async () => {
+  const app = await harness({ completedRakat: 1 });
+  assert.match(app.element("totals").textContent, /1 \/ 2 estimated rakat/);
+  await app.click("start");
+  app.click("stop");
+  assert.match(app.element("totals").textContent, /1 \/ 2 estimated rakat/);
+  assert.match(app.element("session-state").textContent, /Not tracking/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 1);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 2);
 });
 
 test("stop during model loading closes late model and never starts a camera", async () => {

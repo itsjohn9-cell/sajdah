@@ -130,6 +130,15 @@ function render() {
   $("resume").disabled = !stream || !calibration || !counter.paused;
   $("undo").disabled = counter.rakats.length === 0;
   lightButton.disabled = !stream;
+  video.hidden = !stream;
+  $("camera-placeholder").hidden = Boolean(stream);
+  $("session-state").textContent = counter.complete
+    ? "Target reached. Review the estimates below and report whether they were right."
+    : starting ? "Starting camera. Not tracking yet."
+      : !stream ? "Not tracking. Any estimates below are retained until you leave or start a new session."
+        : calibrating ? "Setup in progress. Counting starts only after calibration."
+          : counter.paused ? "Tracking paused. No new counts are being added."
+            : "Tracking active. Counts below are estimates; review after your test.";
 }
 
 function stop(message = "Camera stopped. Review your estimates before continuing.") {

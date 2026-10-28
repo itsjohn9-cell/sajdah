@@ -6,6 +6,32 @@ import 'package:sijda/src/store.dart';
 import 'store_test.dart' show MemoryStorage;
 
 void main() {
+  testWidgets(
+    'automatic counter opens a bounded route separate from manual scrolling',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(SijdaApp(store: SijdaStore(MemoryStorage())));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(NavigationDestination, 'Rakat'));
+      await tester.pumpAndSettle();
+      final open = find.byKey(const Key('open-automatic-rakat'));
+      await tester.ensureVisible(open);
+      await tester.tap(open);
+      await tester.pumpAndSettle();
+      expect(find.text('Automatic rakat'), findsOneWidget);
+      expect(find.text('Manual counter'), findsNothing);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('Manual counter'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('about dialog exposes privacy policy and deletion contact', (
     tester,
   ) async {

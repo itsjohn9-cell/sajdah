@@ -13,8 +13,8 @@ Android package: `app.sijda.sijda`
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Apache-2.0 runtime license included; official model-card license verified |
 | Setup and feature limitations | [README](../README.md) | Includes model download/checksum instructions |
-| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.1/code 2 uploaded and saved; closed-test changes sent for review |
-| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Local testing output; rebuild after source changes; not committed |
+| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.2/code 3 uploaded and saved; closed-test update submitted, quick checks running |
+| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.2/code 3 for physical-device testing; not committed |
 
 ## Privacy-policy hosting
 
@@ -39,11 +39,30 @@ Publishing overview subsequently showed 13 changes sent for review, with quick
 checks running before Google's review. Approval and tester availability remain
 unverified. Managed publishing was off. Production was not changed.
 
-The closed Alpha release is `0.1.1 (2) - closed camera testing`. Tester lists
-are Closed testers, Fam and Testers. Countries are Pakistan, United Arab
-Emirates, United Kingdom and United States. Listing text, original icon/feature
+The initial closed Alpha release was `0.1.1 (2) - closed camera testing`. Tester
+lists are Closed testers, Fam and Testers. The initial country selection was
+Pakistan, United Arab Emirates, United Kingdom and United States. Listing text, original icon/feature
 graphic and two mobile-sized app screenshots were saved. Store support email
 was corrected and saved as fehmatics@gmail.com.
+
+### Automatic-counter UI update
+
+Version `0.1.2` / code `3`, release
+`0.1.2 (3) - automatic counter UI fix`, was submitted for closed Alpha testing.
+Publishing overview was verified to show **Changes in review**, **Start full
+rollout**, and quick checks running before review. Managed publishing remains
+off. This does not confirm approval or availability to testers; production
+was not changed.
+
+The update provides a dedicated full-height camera route, sticky totals and
+tracking status, retained results after Stop, and a camera-off placeholder.
+Validation passed: 40 Node tests, 23 Flutter tests, Flutter analysis, web build,
+and signed Android APK/AAB builds. Synthetic/browser checks do not replace
+validation on the affected phone or establish real-world counting accuracy.
+
+Console displayed 178 countries during this update, unlike the initial four.
+No geography settings were changed; the owner should verify the intended
+selection in Console.
 
 ## Before closed-test rollout
 

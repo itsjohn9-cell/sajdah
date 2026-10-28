@@ -81,12 +81,12 @@ Android package identifier is `app.sijda.sijda`.
 ### Initial validation
 
 - `flutter analyze`: no issues.
-- `flutter test`: 21 model/widget tests covering persistence,
+- `flutter test`: 23 model/widget tests covering persistence,
   failure recovery, input validation, manual sessions and large-text layout.
 - `flutter build web`: successful.
 - Browser smoke check: tasbeeh counting and persistence across reload; desktop
   and phone-sized layouts inspected.
-- 39 Node regression tests cover counting, pose inputs, async camera lifecycle,
+- 40 Node regression tests cover counting, pose inputs, async camera lifecycle,
   low-light assistance, feedback validation and upload failures. Five Firestore emulator tests exercise
   server authorization. See [detailed cases and device matrix](test/README.md).
 - Camera state-machine/landmark tests use synthetic observations, not real
@@ -101,6 +101,13 @@ Android package identifier is `app.sijda.sijda`.
   wiring, not real-world pose recognition.
 
 ## Automatic rakat prototype
+
+From Rakat, choose **Open automatic counter**. Automatic tracking uses a
+dedicated full-height screen so it does not compete with the manual page's
+scrolling. Live totals and camera/tracking state stay at the top; session
+history and feedback are in the same scrollable page. An inactive camera shows
+a text placeholder rather than a native video play control. Review/report
+estimates before going Back, which ends the temporary automatic session.
 
 Open Rakat in the **web app** and enable the camera explicitly. Mobile browsers
 require an HTTPS deployment (a phone accessing a laptop's plain HTTP LAN address
@@ -225,16 +232,21 @@ privately. Never commit or share its files. Gradle reads `signing.properties`
 there, or the file specified by `SIJDA_SIGNING_PROPERTIES`. Release builds fail
 explicitly when signing is absent rather than silently using debug signing.
 
-Sijda has been created in Play Console. Version `0.1.1` / code `2`, including
-low-light assistance and privacy access, is prepared for closed Alpha testing.
-Publishing overview shows its changes sent for review, with Google's quick
-checks running. Approval and tester installation availability are not verified.
+Sijda has been created in Play Console. Version `0.1.2` / code `3` fixes the
+phone automatic-counter layout, pins totals/tracking status and retains
+estimates after Stop. Publishing overview lists
+`0.1.2 (3) - automatic counter UI fix` under **Changes in review** for closed
+Alpha testing, with Google's quick checks running. Approval and tester
+installation availability for this update are not yet verified.
 A signed bundle is built at `build/app/outputs/bundle/release/app-release.aab`.
 A directly installable, signature-verified release APK for physical-device testing
 is at `build/app/outputs/flutter-apk/app-release.apk` (approximately 63.4 MB).
-Production remains untouched. The superseded version-1 bundle was removed
-from the release. Closed-test countries are Pakistan, United Arab Emirates,
-United Kingdom and United States. Physical-device validation is still pending.
+Production remains untouched. The update does not retain previous bundles.
+The initial country selection was Pakistan, United Arab Emirates, United
+Kingdom and United States; during this update Console displayed 178 countries.
+No country settings were changed for this update; the owner should verify the
+intended geography in Console. The layout fix still needs validation on the
+affected physical phone.
 Publisher: **MJ.**; public support/privacy/deletion contact:
 **fehmatics@gmail.com**. The [privacy-policy HTML](web/privacy.html) is written;
 the policy-only GitHub Pages deployment is configured by

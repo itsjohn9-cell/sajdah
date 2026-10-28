@@ -2,6 +2,21 @@
 
 ## Repeatable automated checks
 
+### Mobile result visibility regression
+
+- Rakat opens automatic counting on a dedicated viewport-height route, not a
+  900px platform view inside Flutter's manual-counter scroll area.
+- At 360x640 the route has no enclosing Flutter scroll view or manual counter;
+  Back returns to the manual page without overflow.
+- The camera page keeps totals and setup/active/paused/stopped state at the top
+  while its one HTML document scrolls. Completed estimates remain visible after
+  Stop; zero estimates are explicitly labeled.
+- Before acquisition and after Stop/error, the video is hidden and a camera-off
+  placeholder replaces native WebView video controls.
+- Verify on the affected Android phone that the results, history, restart/undo
+  controls and feedback form are reachable with one-finger scrolling. Check
+  small screens, landscape and enlarged text, and confirm Back releases camera.
+
 ```sh
 ../flutter-sdk/bin/flutter analyze
 ../flutter-sdk/bin/flutter test
