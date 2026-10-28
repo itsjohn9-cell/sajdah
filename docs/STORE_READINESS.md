@@ -13,8 +13,8 @@ Android package: `app.sijda.sijda`
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Apache-2.0 runtime license included; official model-card license verified |
 | Setup and feature limitations | [README](../README.md) | Includes model download/checksum instructions |
-| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.3/code 4 built and signed locally; ready for upload |
-| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed 0.1.3/code 4 for physical-device testing; not committed |
+| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.3/code 4 uploaded and saved; closed-test update submitted |
+| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.3/code 4 for physical-device testing; not committed |
 
 ## Privacy-policy hosting
 
@@ -72,7 +72,8 @@ feedback navigation and export, adds Android hardware proximity/light sensor
 bridges, introduces phone orientation detection, profile/upper-body pose
 classification, and mat mode detection.
 Validation passed: 55 Node tests, 23 Flutter tests, Flutter analysis, web
-build, and signed Android release AAB/APK builds.
+build, and signed Android release AAB/APK builds. The release bundle was
+uploaded to closed testing in Google Play Console.
 
 ## Before closed-test rollout
 
