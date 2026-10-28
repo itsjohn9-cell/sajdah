@@ -18,6 +18,58 @@ document.getElementById("review-feedback").addEventListener("click", () => {
   section.style.scrollMarginTop = `${document.querySelector(".session-summary").offsetHeight + 12}px`;
 });
 
+const quickReviewSection = document.getElementById("quick-review");
+const verdictBanner = document.getElementById("quick-review-verdict");
+const closeReviewBtn = document.getElementById("close-quick-review");
+const openFullFormBtn = document.getElementById("quick-fill-feedback");
+
+if (closeReviewBtn) {
+  closeReviewBtn.addEventListener("click", () => {
+    if (quickReviewSection) quickReviewSection.hidden = true;
+  });
+}
+
+if (openFullFormBtn) {
+  openFullFormBtn.addEventListener("click", () => {
+    const section = document.getElementById("feedback-section");
+    if (section) {
+      section.open = true;
+      if (typeof section.scrollIntoView === "function") {
+        section.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  });
+}
+
+if (typeof document.querySelectorAll === "function") {
+  document.querySelectorAll(".rakat-opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const actualRakat = Number(btn.getAttribute("data-rakat"));
+      const snapshot = feedbackSnapshot();
+      const detectedRakat = snapshot.detectedRakat;
+      const isCorrect = actualRakat === detectedRakat;
+
+      if (verdictBanner) {
+        verdictBanner.hidden = false;
+        if (isCorrect) {
+          verdictBanner.style.color = "#176b58";
+          verdictBanner.textContent = `✅ Perfect match! You prayed ${actualRakat} rakat(s) and Sijda detected ${detectedRakat} rakat(s).`;
+        } else {
+          verdictBanner.style.color = "#a33";
+          verdictBanner.textContent = `⚠️ Mismatch: You prayed ${actualRakat} rakat(s), but Sijda detected ${detectedRakat} rakat(s) (${snapshot.detectedSajdahs} sajdahs). Detailed log is ready below.`;
+        }
+      }
+
+      const expectedRakatInput = form.querySelector('[name="expectedRakat"]');
+      const expectedSajdahsInput = form.querySelector('[name="expectedSajdahs"]');
+      const verdictSelect = form.querySelector('[name="verdict"]');
+      if (expectedRakatInput) expectedRakatInput.value = actualRakat;
+      if (expectedSajdahsInput) expectedSajdahsInput.value = actualRakat * 2;
+      if (verdictSelect) verdictSelect.value = isCorrect ? "correct" : "incorrect";
+    });
+  });
+}
+
 form.addEventListener("submit", async event => {
   event.preventDefault();
   if (!form.reportValidity() || button.disabled) return;

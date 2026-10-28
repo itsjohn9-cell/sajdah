@@ -12,6 +12,7 @@ export class RakatCounter {
     this.candidate = "unknown";
     this.since = 0;
     this.lastStable = "unknown";
+    this.hasStood = false;
     this.paused = false;
     this.reason = "";
     this.lastTime = null;
@@ -53,11 +54,13 @@ export class RakatCounter {
       switch (this.phase) {
         case "standing":
           if (posture === "standing") {
+            this.hasStood = true;
             this.phase = "bow";
           } else if (posture === "bow") {
+            this.hasStood = true;
             this.phase = "upright";
-          } else if (posture === "sajdah") {
-            // Direct prostration if camera angle partially cut ruku
+          } else if (posture === "sajdah" && this.hasStood) {
+            // Direct prostration if camera angle partially cut ruku AFTER standing was established
             this.sajdahs = 1;
             this.phase = "between";
           }
@@ -89,13 +92,8 @@ export class RakatCounter {
           }
           break;
         case "between":
-          if (posture === "sitting") {
+          if (posture === "sitting" || posture === "standing") {
             this.phase = "secondSajdah";
-          } else if (posture === "sajdah") {
-            this.sajdahs = 2;
-            this.phase = "exit";
-          } else if (posture === "standing") {
-            this.phase = "standing";
           }
           break;
         case "secondSajdah":
@@ -108,6 +106,7 @@ export class RakatCounter {
           if (posture === "sitting" || posture === "standing") {
             this.rakats.push({ sajdahs: 2 });
             this.sajdahs = 0;
+            this.hasStood = posture === "standing";
             this.phase = posture === "standing" ? "bow" : "standing";
           }
           break;
@@ -169,6 +168,7 @@ export class RakatCounter {
     this.candidate = this.lastStable = "unknown";
     this.lastTime = null;
     this.since = 0;
+    this.hasStood = false;
     this.paused = false;
     this.reason = "";
   }
@@ -321,7 +321,14 @@ export function adaptiveCalibration(points, options = {}) {
 export function classifyPose(points, calibration, context = {}) {
   if (!calibration) return "unknown";
 
-  const isProximity = context.proximity === true || (Number.isFinite(context.proximityDistance) && context.proximityDistance <= 5.0);
+  const maxRange = Number.isFinite(context.proximityMaxRange) && context.proximityMaxRange > 0
+    ? context.proximityMaxRange
+    : 5.0;
+  const isProximity = context.proximity === true ||
+    (Number.isFinite(context.proximityDistance) &&
+     context.proximityDistance >= 0 &&
+     context.proximityDistance < 3.0 &&
+     context.proximityDistance < maxRange);
   const isOpticalProximity = context.opticalProximity === true;
   const isCovered = context.isCovered === true;
 
@@ -505,4 +512,55 @@ export function diagnosePlacement({
   }
 
   return null;
+}
+
+export function filterValidPoses(poses) {
+  if (!Array.isArray(poses) || poses.length === 0) return [];
+  return poses.filter(landmarks => {
+    if (!Array.isArray(landmarks) || landmarks.length < 13) return false;
+    const nose = landmarks[0];
+    const ls = landmarks[11];
+    const rs = landmarks[12];
+    const noseVis = (nose && Number.isFinite(nose.visibility)) ? nose.visibility : 0;
+    const lsVis = (ls && Number.isFinite(ls.visibility)) ? ls.visibility : 0;
+    const rsVis = (rs && Number.isFinite(rs.visibility)) ? rs.visibility : 0;
+    const hasKeypoints = (lsVis >= 0.40 || rsVis >= 0.40) || (noseVis >= 0.60);
+    if (!hasKeypoints) return false;
+
+    let minX = 1, maxX = 0, minY = 1, maxY = 0, count = 0;
+    for (let i = 0; i <= 24 && i < landmarks.length; i++) {
+      const p = landmarks[i];
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.visibility ?? 1) > 0.25) {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+        count++;
+      }
+    }
+    if (count < 3) return false;
+    return (maxX - minX > 0.08 || maxY - minY > 0.10);
+  });
+}
+
+export function selectPrimaryPose(poses) {
+  const valid = filterValidPoses(poses);
+  if (valid.length === 0) return { pose: null, isMultiple: false };
+  if (valid.length === 1) return { pose: valid[0], isMultiple: false };
+
+  const scored = valid.map(pose => {
+    let score = 0;
+    for (let i = 0; i <= 24 && i < pose.length; i++) {
+      score += (pose[i]?.visibility ?? 0);
+    }
+    return { pose, score };
+  }).sort((a, b) => b.score - a.score);
+
+  // If the top pose is far more prominent (e.g. 2x score of reflection), track top pose
+  if (scored[0].score > scored[1].score * 2.0 && scored[1].score < 4.5) {
+    return { pose: scored[0].pose, isMultiple: false };
+  }
+
+  // Genuinely multiple people in frame
+  return { pose: null, isMultiple: true };
 }

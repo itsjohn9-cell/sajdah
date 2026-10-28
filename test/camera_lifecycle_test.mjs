@@ -2,7 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
-import { RakatCounter, standingCalibration, adaptiveCalibration, classifyPose, detectOrientation, diagnosePlacement } from "../web/rakat/counter.mjs";
+import {
+  RakatCounter,
+  standingCalibration,
+  adaptiveCalibration,
+  classifyPose,
+  detectOrientation,
+  diagnosePlacement,
+  selectPrimaryPose,
+} from "../web/rakat/counter.mjs";
 import { LightingMonitor } from "../web/rakat/lighting.mjs";
 
 async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false, completedRakat = 0 } = {}) {
@@ -73,7 +81,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
     console: { error() {} },
   });
   const counterModule = new vm.SyntheticModule(
-    ["RakatCounter", "standingCalibration", "classifyPose", "adaptiveCalibration", "detectOrientation", "diagnosePlacement"],
+    ["RakatCounter", "standingCalibration", "classifyPose", "adaptiveCalibration", "detectOrientation", "diagnosePlacement", "selectPrimaryPose"],
     function () {
       this.setExport("RakatCounter", class extends RakatCounter {
         constructor(...args) {
@@ -86,6 +94,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
       this.setExport("adaptiveCalibration", adaptiveCalibration);
       this.setExport("detectOrientation", detectOrientation);
       this.setExport("diagnosePlacement", diagnosePlacement);
+      this.setExport("selectPrimaryPose", selectPrimaryPose);
     }, { context },
   );
   const mediaModule = new vm.SyntheticModule(["FilesetResolver", "PoseLandmarker"], function () {

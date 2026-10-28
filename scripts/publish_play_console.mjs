@@ -112,7 +112,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'Enhanced prostration tracking and prayer cycle resilience: recognizes close proximity and optical occlusion at the prostration spot, handles 2/3/4 rakat sequences and middle/final tashahhud smoothly, and eliminates false pauses during prayer.'
+        text: 'Enhanced prostration placement & diagnostics: fixed proximity sensor threshold for Android devices, eliminated false multiple-people detection caused by carpet shadows/reflections, added on-device test video recording and direct session review feedback flow.'
       }
     ];
 

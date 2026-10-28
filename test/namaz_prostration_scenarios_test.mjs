@@ -7,6 +7,8 @@ import {
   detectOrientation,
   diagnosePlacement,
   upperFeatures,
+  filterValidPoses,
+  selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
 
 function namazSession(target = 2) {
@@ -248,3 +250,102 @@ test("Scenario 9: Orientation detection accurately categorizes real-world phone 
   assert.equal(detectOrientation(85, 0), "upright");     // Standing in phone dock
   assert.equal(detectOrientation(-30, 0), "downward");   // Tilted away
 });
+
+test("Scenario 10: Frame 0 proximity or leaning over phone does not prematurely count sajdah before standing", () => {
+  const s = namazSession(2);
+  // Phone placed on mat: proximity sensor or face very close as phone is being placed
+  s.hold("sajdah", 1500);
+  assert.equal(s.counter.sajdahs, 0, "Cannot count sajdah before user stands to begin prayer");
+  assert.equal(s.counter.phase, "standing");
+
+  // User stands upright for Qiyam
+  s.hold("standing", 1000);
+  assert.equal(s.counter.phase, "bow");
+  assert.equal(s.counter.hasStood, true);
+
+  // Now, prostration counts sajdah 1
+  s.hold("sajdah", 1500);
+  assert.equal(s.counter.sajdahs, 1);
+  assert.equal(s.counter.phase, "between");
+});
+
+test("Scenario 11: Android Proximity FAR value (5.0cm) does not falsely trigger sajdah, NEAR (0.0cm) does", () => {
+  const cal = { mode: "mat" };
+  const points = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.40 });
+
+  // FAR value of 5.0 (Android Sensor.TYPE_PROXIMITY maximumRange)
+  const farContext = {
+    proximity: false,
+    proximityDistance: 5.0,
+    proximityMaxRange: 5.0,
+  };
+  const farPosture = classifyPose(points, cal, farContext);
+  assert.notEqual(farPosture, "sajdah", "FAR proximity of 5.0cm must not trigger sajdah");
+  assert.equal(farPosture, "standing");
+
+  // NEAR value of 0.0 (object right over sensor)
+  const nearContext = {
+    proximity: true,
+    proximityDistance: 0.0,
+    proximityMaxRange: 5.0,
+  };
+  const nearPosture = classifyPose(points, cal, nearContext);
+  assert.equal(nearPosture, "sajdah", "NEAR proximity must trigger sajdah");
+});
+
+test("Scenario 12: Carpet/floor reflection poses are filtered out and primary worshipper is tracked", () => {
+  const mainPerson = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.40 });
+  // Shadow or reflection on carpet/floor tile with low confidence / tiny span
+  const reflectionPose = Array.from({ length: 33 }, () => ({ x: 0.8, y: 0.9, z: 0, visibility: 0.15 }));
+  reflectionPose[0] = { x: 0.8, y: 0.9, z: 0, visibility: 0.2 };
+  reflectionPose[11] = { x: 0.82, y: 0.92, z: 0, visibility: 0.1 };
+
+  const valid = filterValidPoses([mainPerson, reflectionPose]);
+  assert.equal(valid.length, 1, "Only the real worshipper passes landmark validation");
+
+  const { pose, isMultiple } = selectPrimaryPose([mainPerson, reflectionPose]);
+  assert.equal(isMultiple, false, "Must not trigger false multiple people detection for carpet reflection");
+  assert.ok(pose, "Main worshipper pose must be tracked");
+});
+
+test("Scenario 13: Full 2-Rakat prayer when Jalsah appears as standing from under-prostration spot", () => {
+  const s = namazSession(2);
+
+  // Rakat 1
+  s.hold("standing", 1200);   // Qiyam
+  s.hold("sajdah", 1200);     // Sajdah 1
+  assert.equal(s.counter.sajdahs, 1);
+  assert.equal(s.counter.phase, "between");
+
+  // Jalsa sitting viewed from ground prostration spot (head far up, looks upright/standing)
+  s.hold("standing", 800);    // Jalsa separator
+  assert.equal(s.counter.phase, "secondSajdah");
+
+  s.hold("sajdah", 1200);     // Sajdah 2
+  assert.equal(s.counter.sajdahs, 2);
+  assert.equal(s.counter.phase, "exit");
+
+  // Rise to stand for Rakat 2
+  s.hold("standing", 1000);
+  assert.equal(s.counter.rakats.length, 1);
+  assert.equal(s.counter.sajdahs, 0);
+
+  // Rakat 2
+  s.hold("sajdah", 1200);     // Sajdah 1
+  assert.equal(s.counter.sajdahs, 1);
+  assert.equal(s.counter.phase, "between");
+
+  s.hold("standing", 800);    // Jalsa
+  assert.equal(s.counter.phase, "secondSajdah");
+
+  s.hold("sajdah", 1200);     // Sajdah 2
+  assert.equal(s.counter.sajdahs, 2);
+  assert.equal(s.counter.phase, "exit");
+
+  // Final Tashahhud (sitting)
+  s.hold("sitting", 1000);
+  assert.equal(s.counter.rakats.length, 2);
+  assert.equal(s.counter.complete, true);
+  assert.equal(s.counter.sajdahs, 0);
+});
+

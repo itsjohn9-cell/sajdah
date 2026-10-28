@@ -75,7 +75,12 @@
     <select id="target"><option value="2">2 rakat</option><option value="3">3 rakat</option><option value="4">4 rakat</option></select>
     <button id="start" class="primary">Enable front camera</button>
     <button id="stop" disabled>Stop camera</button>
+    <button id="done-review" class="primary">Done / Review session</button>
   </div>
+  <label class="consent" style="margin: 6px 0 12px 0; font-size: 0.9rem;">
+    <input type="checkbox" id="record-test-video" checked>
+    Record test video on device (optional, for diagnostic download & review)
+  </label>
   <div class="preview">
     <p id="camera-placeholder">Camera off. Tap Enable front camera to begin setup.</p>
     <video id="video" hidden playsinline muted disablepictureinpicture aria-label="Mirrored front camera preview"></video>
@@ -94,6 +99,35 @@
     <button id="undo" disabled>Undo last rakat</button>
     <button id="reset">New automatic session</button>
   </div>
+  <section id="quick-review" class="preview" style="background: white; border: 2px solid #176b58; padding: 14px; margin: 12px 0;" hidden>
+    <h2 style="color: #174e40; margin-bottom: 6px;">Test Session Review</h2>
+    <p id="review-comparison" style="font-size: 1.1rem; font-weight: 600; margin: 4px 0;">Sijda detected: 0 rakat(s).</p>
+    <div style="margin: 12px 0;">
+      <p style="margin: 4px 0;"><strong>How many rakats did you actually pray?</strong></p>
+      <div class="controls" id="rakat-picker">
+        <button type="button" class="rakat-opt" data-rakat="1">1 Rakat</button>
+        <button type="button" class="rakat-opt" data-rakat="2">2 Rakats</button>
+        <button type="button" class="rakat-opt" data-rakat="3">3 Rakats</button>
+        <button type="button" class="rakat-opt" data-rakat="4">4 Rakats</button>
+      </div>
+    </div>
+    <div id="quick-review-verdict" role="status" style="font-weight: 600; margin: 8px 0;" hidden></div>
+    <div id="video-recording-container" hidden style="margin: 12px 0;">
+      <h3 style="font-size: 1.1rem; margin: 6px 0;">Diagnostic Video Recording</h3>
+      <video id="diagnostic-video-player" controls playsinline style="max-height: 220px; width: 100%; border-radius: 8px; background: #000;"></video>
+      <div class="controls" style="margin-top: 8px;">
+        <a id="download-video-btn" download="sijda-prayer-test.webm" style="display: inline-block; padding: 10px 14px; background: #176b58; color: white; text-decoration: none; border-radius: 8px;">Download test video</a>
+      </div>
+    </div>
+    <details id="quick-timeline-details" style="margin: 8px 0;">
+      <summary>Diagnostic Transition Log (<span id="timeline-count">0</span> events)</summary>
+      <pre id="timeline-log" style="font-size: 0.8rem; max-height: 180px; overflow-y: auto; background: #e4eee8; padding: 8px; border-radius: 6px;"></pre>
+    </details>
+    <div class="controls" style="margin-top: 12px;">
+      <button id="quick-fill-feedback" class="primary">Open full feedback form</button>
+      <button id="close-quick-review">Close review</button>
+    </div>
+  </section>
   <p class="setup-info">Start standing for calibration. The tracker then expects standing → ruku →
     standing → sajdah → sitting → sajdah → sitting/standing.
     A rakat estimate is added only after leaving the second sajdah.</p>

@@ -127,6 +127,19 @@ class RakatCameraView(
 
         @JavascriptInterface
         fun hasLightSensor(): Boolean = lightSensor != null
+
+        @JavascriptInterface
+        fun getProximityMaxRange(): Float = proximitySensor?.maximumRange ?: -1f
+
+        @JavascriptInterface
+        fun isNear(): Boolean {
+            val sensor = proximitySensor ?: return false
+            val value = latestProximity
+            if (value < 0f) return false
+            // On Android, binary or distance proximity reports maximumRange when FAR.
+            // Only report near when value is strictly less than maximumRange and < 3.5cm.
+            return value < sensor.maximumRange && value < 3.5f
+        }
     }
 
     private val sensorBridge = SensorBridge()

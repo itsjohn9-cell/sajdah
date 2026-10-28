@@ -1,4 +1,12 @@
-import { RakatCounter, standingCalibration, adaptiveCalibration, classifyPose, detectOrientation, diagnosePlacement } from "./counter.mjs";
+import {
+  RakatCounter,
+  standingCalibration,
+  adaptiveCalibration,
+  classifyPose,
+  detectOrientation,
+  diagnosePlacement,
+  selectPrimaryPose,
+} from "./counter.mjs";
 import { LightingMonitor } from "./lighting.mjs";
 
 export function feedbackSnapshot() {
@@ -9,6 +17,14 @@ export function feedbackSnapshot() {
     interruptions, completed: counter.complete,
     transitions: transitions.map(item => ({ ...item })),
   };
+}
+
+export function getTransitions() {
+  return transitions.map(item => ({ ...item }));
+}
+
+export function getRecordedVideoUrl() {
+  return recordedVideoUrl;
 }
 
 export function stopForFeedback() {
@@ -50,6 +66,60 @@ let orientation = "unknown";
 let devicePitch = null;
 let deviceRoll = null;
 let lastPoseTime = 0;
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordedVideoUrl = null;
+
+function startRecording(mediaStream) {
+  recordedChunks = [];
+  if (recordedVideoUrl) {
+    try { URL.revokeObjectURL(recordedVideoUrl); } catch (_) {}
+    recordedVideoUrl = null;
+  }
+  const recordCheckbox = $("record-test-video");
+  if (recordCheckbox && !recordCheckbox.checked) return;
+  if (typeof MediaRecorder === "undefined") return;
+  try {
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
+      ? "video/webm;codecs=vp8"
+      : MediaRecorder.isTypeSupported("video/webm")
+        ? "video/webm"
+        : MediaRecorder.isTypeSupported("video/mp4")
+          ? "video/mp4"
+          : "";
+    const options = mimeType ? { mimeType } : undefined;
+    mediaRecorder = new MediaRecorder(mediaStream, options);
+    mediaRecorder.ondataavailable = e => {
+      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstop = () => {
+      if (recordedChunks.length > 0) {
+        const type = (mediaRecorder && mediaRecorder.mimeType) || "video/webm";
+        const blob = new Blob(recordedChunks, { type });
+        recordedVideoUrl = URL.createObjectURL(blob);
+        const player = $("diagnostic-video-player");
+        const downloadBtn = $("download-video-btn");
+        const container = $("video-recording-container");
+        if (player) player.src = recordedVideoUrl;
+        if (downloadBtn) {
+          downloadBtn.href = recordedVideoUrl;
+          downloadBtn.download = `sijda-prayer-test-${Date.now()}.${type.includes("mp4") ? "mp4" : "webm"}`;
+        }
+        if (container) container.hidden = false;
+      }
+    };
+    mediaRecorder.start(1000);
+  } catch (e) {
+    console.warn("Sijda diagnostic video recording failed to start", e);
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    try { mediaRecorder.stop(); } catch (_) {}
+  }
+  mediaRecorder = null;
+}
 
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("deviceorientation", event => {
@@ -64,12 +134,24 @@ if (typeof window !== "undefined" && window.addEventListener) {
 function getSensorData() {
   if (typeof window !== "undefined" && window.SijdaSensors) {
     try {
+      const hasProx = window.SijdaSensors.hasProximity();
       const prox = window.SijdaSensors.getProximity();
       const lux = window.SijdaSensors.getLux();
-      const hasProx = window.SijdaSensors.hasProximity();
+      const maxRange = typeof window.SijdaSensors.getProximityMaxRange === "function"
+        ? window.SijdaSensors.getProximityMaxRange()
+        : 5.0;
+      let isNear = false;
+      if (hasProx) {
+        if (typeof window.SijdaSensors.isNear === "function") {
+          isNear = window.SijdaSensors.isNear();
+        } else {
+          isNear = prox >= 0 && prox < 3.0 && (maxRange <= 0 || prox < maxRange);
+        }
+      }
       return {
         proximityDistance: prox,
-        proximity: hasProx && prox >= 0 && prox <= 5.0,
+        proximityMaxRange: maxRange,
+        proximity: isNear,
         lux: lux >= 0 ? lux : null,
       };
     } catch (e) {
@@ -83,10 +165,9 @@ function checkOpticalProximity(points, isCovered = false) {
   if (isCovered) return true;
   if (!points || !points[0]) return false;
   const nose = points[0];
-  if (Number.isFinite(nose.z) && nose.z < -0.2) return true;
-  if (points[7] && points[8] && Math.abs(points[7].x - points[8].x) > 0.35) return true;
-  if (points[2] && points[5] && Math.abs(points[2].x - points[5].x) > 0.25) return true;
-  if (nose.y > 0.70) return true;
+  if (Number.isFinite(nose.z) && nose.z < -0.25) return true;
+  if (points[7] && points[8] && Math.abs(points[7].x - points[8].x) > 0.40) return true;
+  if (points[2] && points[5] && Math.abs(points[2].x - points[5].x) > 0.30) return true;
   return false;
 }
 
@@ -190,6 +271,7 @@ function render() {
 }
 
 function stop(message = "Camera stopped. Review your estimates before continuing.") {
+  stopRecording();
   setScreenLight(false);
   lightingStatus.textContent = "Lighting check off. Camera frames are sampled only on-device while tracking.";
   generation++;
@@ -247,6 +329,7 @@ async function start() {
     video.srcObject = stream;
     await video.play();
     if (token !== generation) return;
+    startRecording(stream);
     starting = false;
     lastVideoTime = -1;
     lastInference = 0;
@@ -294,8 +377,15 @@ function loop(time) {
       lastInference = time;
       sampleLighting(time);
       const result = detector.detectForVideo(video, time);
-      const points = result.landmarks.length === 1 ? result.landmarks[0] : null;
+      const { pose: points, isMultiple } = selectPrimaryPose(result.landmarks);
       if (calibrating) {
+        if (isMultiple) {
+          calibrationSince = null;
+          baseline = null;
+          status("Setup: one full body must be visible. Multiple people detected. Only one person should be in camera view.");
+          frame = requestAnimationFrame(loop);
+          return;
+        }
         const sample = standingCalibration(points, { allowAdaptive: true, orientation, pitch: devicePitch });
         const stable = sample && (!baseline ||
           (sample.mode === baseline.mode &&
@@ -327,7 +417,7 @@ function loop(time) {
           }
         }
       } else if (!counter.paused && !counter.complete) {
-        if (result.landmarks.length > 1) {
+        if (isMultiple) {
           counter.pause("Multiple people detected. Only one person should be in camera view.");
           status(counter.reason);
           render();
@@ -440,4 +530,38 @@ window.addEventListener("resize", () => {
     render();
   }
 });
+
+export function openReviewPanel() {
+  const panel = $("quick-review");
+  if (!panel) return;
+  panel.hidden = false;
+  const comp = $("review-comparison");
+  if (comp) {
+    comp.textContent = `Sijda detected: ${counter.rakats.length} rakat(s) and ${counter.sajdahs} partial sajdah(s).`;
+  }
+  const timelineEl = $("timeline-log");
+  const countEl = $("timeline-count");
+  if (timelineEl) {
+    if (transitions.length === 0) {
+      timelineEl.textContent = "No posture transitions recorded yet.";
+    } else {
+      timelineEl.textContent = transitions.map(t =>
+        `+${(t.elapsedMs / 1000).toFixed(1)}s: ${t.posture.padEnd(8)} (phase: ${t.phase.padEnd(12)}, rakat: ${t.rakat}, sajdahs: ${t.sajdahs})`
+      ).join("\n");
+    }
+  }
+  if (countEl) countEl.textContent = String(transitions.length);
+  if (typeof panel.scrollIntoView === "function") {
+    panel.scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+const doneReviewBtn = $("done-review");
+if (doneReviewBtn) {
+  doneReviewBtn.addEventListener("click", () => {
+    stop("Session finished for review. Check your test results below.");
+    openReviewPanel();
+  });
+}
+
 render();
