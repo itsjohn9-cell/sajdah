@@ -94,8 +94,10 @@ class _SijdaHomeState extends State<SijdaHome> {
                       'only with your consent; it never includes camera images. '
                       'Clearing app/browser data removes your records; '
                       'backup and sync are not available yet.\n\n'
-                      'This is a personal record, not a religious ruling. '
-                      'Consult a trusted scholar for individual questions.',
+                      'This is a personal worship aid, not a religious ruling. '
+                      'Islamic terminology and prayer movement sequences follow '
+                      'the Islamic Laws (Tawdih al-Masa\'il) of Ayatullah al-Uzma al-Sistani. '
+                      'Consult a qualified scholar for individual questions.',
                     ),
                     TextButton(
                       onPressed: _openPrivacyPolicy,

@@ -278,6 +278,12 @@ The web build may fetch Flutter rendering assets on its initial load. Native
 counter flows do not need a connection; web offline cold-start support has not
 been implemented or verified.
 
+## Fiqh and Terminology Standard
+
+All Islamic terms, transliterations, spellings, and prayer movement definitions in **Sajdah** are standardized against the authoritative English translation of **Ayatullah al-Uzma Sayyid Ali al-Husayni al-Sistani's *Tawdih al-Masa'il* (*Islamic Laws*)** (see [sistani.org](https://www.sistani.org/english/book/48/)).
+
+For the full canonical term index, movement flow citations, and ruling references, see the [Islamic Terminology & Fiqh Reference Guide](docs/ISLAMIC_GLOSSARY.md).
+
 ## Delivery roadmap
 
 1. Validate manual flows on real Android/iOS devices; add export/restore and
