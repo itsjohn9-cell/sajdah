@@ -347,3 +347,73 @@ test("diagnosePlacement provides actionable guidance for extreme conditions", ()
   assert.equal(diagCut.code, "head_cut_off");
   assert.match(diagCut.fix, /upward/);
 });
+
+test("adaptive prostration-place tracking counts two sajdahs and completes rakat without pausing", () => {
+  const counter = new RakatCounter(2, { adaptive: true });
+  let time = 1000;
+  const hold = (posture, ms = 700) => {
+    for (let elapsed = 0; elapsed <= ms; elapsed += 100) {
+      counter.observe(posture, time + elapsed);
+    }
+    time += ms + 100;
+  };
+
+  // 1. Standing upright (Qiyam)
+  hold("standing");
+  assert.equal(counter.phase, "bow");
+
+  // 2. Bowing (Ruku)
+  hold("bow");
+  assert.equal(counter.phase, "upright");
+
+  // 3. First sajdah (body close to prostration spot)
+  hold("sajdah");
+  assert.equal(counter.sajdahs, 1);
+  assert.equal(counter.phase, "between");
+
+  // 4. Sitting between sajdahs (Jalsa)
+  hold("sitting");
+  assert.equal(counter.phase, "secondSajdah");
+
+  // 5. Second sajdah (body close to prostration spot again)
+  hold("sajdah");
+  assert.equal(counter.sajdahs, 2);
+  assert.equal(counter.phase, "exit");
+
+  // 6. Rising for next rakat
+  hold("standing");
+  assert.equal(counter.rakats.length, 1);
+  assert.equal(counter.sajdahs, 0);
+  assert.equal(counter.paused, false);
+});
+
+test("adaptive prostration tolerates missed bow when camera is under prostration place", () => {
+  const counter = new RakatCounter(2, { adaptive: true });
+  let time = 1000;
+  const hold = (posture, ms = 700) => {
+    for (let elapsed = 0; elapsed <= ms; elapsed += 100) {
+      counter.observe(posture, time + elapsed);
+    }
+    time += ms + 100;
+  };
+
+  hold("standing");
+  // Direct drop to sajdah when floor camera angle misses intermediate bowing
+  hold("sajdah");
+  assert.equal(counter.sajdahs, 1);
+  assert.equal(counter.paused, false);
+
+  hold("sitting");
+  hold("sajdah");
+  assert.equal(counter.sajdahs, 2);
+
+  // Completed in Tashahhud (sitting)
+  hold("sitting");
+  assert.equal(counter.rakats.length, 1);
+  assert.equal(counter.paused, false);
+});
+
+test("diagnosePlacement suppresses dim lighting warning during active prostration", () => {
+  const diag = diagnosePlacement({ lightingCondition: "dim", isProstrating: true });
+  assert.equal(diag, null);
+});

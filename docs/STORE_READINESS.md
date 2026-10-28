@@ -13,8 +13,8 @@ Android package: `app.sijda.sijda`
 | Device tests and release gates | [test/README.md](../test/README.md) | Automated coverage; physical-device verification pending |
 | Third-party runtime license and model notes | [attribution](../web/vendor/mediapipe/ATTRIBUTION.md) | Apache-2.0 runtime license included; official model-card license verified |
 | Setup and feature limitations | [README](../README.md) | Includes model download/checksum instructions |
-| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.3/code 4 uploaded and saved; closed-test update submitted |
-| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.3/code 4 for physical-device testing; not committed |
+| Signed AAB | Local `build/app/outputs/bundle/release/app-release.aab` | 0.1.4/code 5 built and signed; ready for upload |
+| Latest signed installable APK | Local `build/app/outputs/flutter-apk/app-release.apk` | Signed and verified 0.1.4/code 5 for physical-device testing; not committed |
 
 ## Privacy-policy hosting
 
@@ -64,16 +64,17 @@ Console displayed 178 countries during this update, unlike the initial four.
 No geography settings were changed; the owner should verify the intended
 selection in Console.
 
-### Sensors, feedback export and enhanced pose estimation update
+### Resilient prostration-place (mat) tracking and non-pausing prayer engine
 
-Version `0.1.3` / code `4`, release
-`0.1.3 (4) - sensors, feedback export and pose improvements`, addresses
-feedback navigation and export, adds Android hardware proximity/light sensor
-bridges, introduces phone orientation detection, profile/upper-body pose
-classification, and mat mode detection.
-Validation passed: 55 Node tests, 23 Flutter tests, Flutter analysis, web
-build, and signed Android release AAB/APK builds. The release bundle was
-uploaded to closed testing in Google Play Console.
+Version `0.1.4` / code `5`, release
+`0.1.4 (5) - resilient prostration tracking and non-pausing prayer flow`,
+eliminates false pauses and spurious error messages during prayer. It introduces
+adaptive prostration-place tracking that recognizes lens occlusion and extreme
+proximity as prostration rather than camera loss or lighting failure, tolerates
+floor camera angles where feet or bowing are partially cut, and uses a
+resilient double-sajdah pulse algorithm to count rakats smoothly.
+Validation passed: 58 Node tests, 23 Flutter tests, Flutter analysis, web
+build, and signed Android release AAB/APK builds.
 
 ## Before closed-test rollout
 

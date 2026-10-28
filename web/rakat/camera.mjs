@@ -17,7 +17,7 @@ export function stopForFeedback() {
 
 const $ = id => document.getElementById(id);
 const video = $("video");
-let counter = new RakatCounter();
+let counter = new RakatCounter(2, { adaptive: true });
 let stream = null;
 let detector = null;
 let starting = false;
@@ -27,6 +27,7 @@ let calibration = null;
 let calibrating = false;
 let calibrationSince = null;
 let baseline = null;
+let baselineCondition = null;
 let lastVideoTime = -1;
 let lastInference = 0;
 let frameWaitSince = null;
@@ -78,11 +79,14 @@ function getSensorData() {
   return {};
 }
 
-function checkOpticalProximity(points) {
+function checkOpticalProximity(points, isCovered = false) {
+  if (isCovered) return true;
   if (!points || !points[0]) return false;
   const nose = points[0];
-  if (Number.isFinite(nose.z) && nose.z < -0.3) return true;
-  if (points[7] && points[8] && Math.abs(points[7].x - points[8].x) > 0.4) return true;
+  if (Number.isFinite(nose.z) && nose.z < -0.2) return true;
+  if (points[7] && points[8] && Math.abs(points[7].x - points[8].x) > 0.35) return true;
+  if (points[2] && points[5] && Math.abs(points[2].x - points[5].x) > 0.25) return true;
+  if (nose.y > 0.70) return true;
   return false;
 }
 
@@ -121,6 +125,9 @@ function sampleLighting(time) {
     if (!lightContext) throw new Error("Preview sampling is unavailable.");
     lightContext.drawImage(video, 0, 0, 32, 24);
     const condition = lightingMonitor.observe(lightContext.getImageData(0, 0, 32, 24).data);
+    if (calibrating && baselineCondition === null) {
+      baselineCondition = condition;
+    }
     lightingStatus.textContent = condition === "dim"
       ? "Low-light warning: the preview is mostly dark. Try the optional screen light or a room light. If tracking stays uncertain, use manual counting."
       : condition === "uneven"
@@ -320,21 +327,35 @@ function loop(time) {
           }
         }
       } else if (!counter.paused && !counter.complete) {
+        if (result.landmarks.length > 1) {
+          counter.pause("Multiple people detected. Only one person should be in camera view.");
+          status(counter.reason);
+          render();
+          frame = requestAnimationFrame(loop);
+          return;
+        }
         if (points) lastPoseTime = time;
         const sensorData = getSensorData();
-        const opticalProx = checkOpticalProximity(points);
+        const isDimFromSajdah = lightingMonitor.condition === "dim" &&
+          (baselineCondition !== "dim" || counter.phase !== "standing");
+        const isCovered = (sensorData.proximity === true) || isDimFromSajdah;
+        const opticalProx = checkOpticalProximity(points, isCovered);
         const context = {
           ...sensorData,
           opticalProximity: opticalProx,
+          isCovered,
           orientation,
           pitch: devicePitch,
           allowPartial: true,
+          mode: calibration?.mode || (orientation === "flat" || Math.abs(devicePitch) <= 45 ? "mat" : "upper"),
         };
         const posture = classifyPose(points, calibration, context);
         counter.observe(posture, time);
         recordTransition(time, posture);
         let guidance = "";
-        if (counter.paused || posture === "unknown" || time - lastPoseTime > 1200) {
+        const isProstrating = posture === "sajdah" || counter.phase === "firstSajdah" ||
+          counter.phase === "between" || counter.phase === "secondSajdah" || isCovered;
+        if (counter.paused || (posture === "unknown" && !isProstrating) || time - lastPoseTime > 1500) {
           const diag = diagnosePlacement({
             points,
             numPoses: result.landmarks.length,
@@ -343,12 +364,13 @@ function loop(time) {
             pitch: devicePitch,
             timeSinceLastDetection: time - lastPoseTime,
             calibration,
+            isProstrating,
           });
           if (diag) guidance = ` Fix: ${diag.fix}`;
         }
         status(counter.paused ? `${counter.reason}${guidance}` :
           counter.complete ? "Session target reached. Stop camera and review estimates." :
-          posture === "unknown" ? `Tracking uncertain. No posture is being assumed.${guidance}` :
+          posture === "unknown" ? (isProstrating ? "Sajdah in progress..." : `Tracking uncertain. No posture is being assumed.${guidance}`) :
           phaseLabels[counter.phase]);
         render();
         if (counter.complete) {
@@ -389,7 +411,7 @@ $("undo").addEventListener("click", () => {
 $("reset").addEventListener("click", () => {
   if (!confirm("Clear this automatic session? Manual and qaza counts will not change.")) return;
   stop();
-  counter = new RakatCounter(Number($("target").value));
+  counter = new RakatCounter(Number($("target").value), { adaptive: true });
   sessionId = crypto.randomUUID();
   interruptions = 0;
   transitions.length = 0;
@@ -399,7 +421,7 @@ $("reset").addEventListener("click", () => {
 
 });
 $("target").addEventListener("change", () => {
-  counter = new RakatCounter(Number($("target").value));
+  counter = new RakatCounter(Number($("target").value), { adaptive: true });
   render();
 });
 document.addEventListener("visibilitychange", () => {

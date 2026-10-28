@@ -112,7 +112,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'Added hardware proximity and light sensor integration for improved mat posture detection. Enhanced camera pose estimation for side-profile and upper-body camera placements. Added selectable feedback JSON export and quick navigation to feedback form.'
+        text: 'Adaptive prostration tracking: recognizes close proximity and lens occlusion under prostration place as sajdah, eliminates false dim-light warnings during prayer, and tolerates floor camera angles without pausing.'
       }
     ];
 
@@ -184,3 +184,4 @@ async function publish() {
 }
 
 publish();
+

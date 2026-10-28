@@ -86,7 +86,7 @@ Android package identifier is `app.sijda.sijda`.
 - `flutter build web`: successful.
 - Browser smoke check: tasbeeh counting and persistence across reload; desktop
   and phone-sized layouts inspected.
-- 55 Node regression tests cover counting, pose inputs, async camera lifecycle,
+- 58 Node regression tests cover counting, pose inputs, async camera lifecycle,
   low-light assistance, feedback validation and upload failures. Five Firestore emulator tests exercise
   server authorization. See [detailed cases and device matrix](test/README.md).
 - Camera state-machine/landmark tests use synthetic observations, not real

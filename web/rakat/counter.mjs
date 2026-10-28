@@ -2,9 +2,10 @@ export const POSTURES = ["standing", "bow", "sajdah", "sitting", "unknown"];
 
 // Require the intervening postures; a pair of low-head detections is not a rakat.
 export class RakatCounter {
-  constructor(target = 2) {
+  constructor(target = 2, options = {}) {
     if (![2, 3, 4].includes(target)) throw new Error("Invalid rakat target");
     this.target = target;
+    this.adaptive = Boolean(options.adaptive);
     this.rakats = [];
     this.sajdahs = 0;
     this.phase = "standing";
@@ -24,7 +25,8 @@ export class RakatCounter {
       throw new Error("Invalid posture observation");
     }
     if (this.paused || this.complete) return;
-    if (this.lastTime !== null && time - this.lastTime > 1500) {
+    const maxGap = this.adaptive ? 3500 : 1500;
+    if (this.lastTime !== null && time - this.lastTime > maxGap) {
       this.pause("Camera frames were interrupted. Review the current rakat.");
       return;
     }
@@ -34,13 +36,85 @@ export class RakatCounter {
       this.since = time;
     }
     if (posture === "unknown") {
-      if (time - this.since >= 1000) {
+      const unknownTimeout = this.adaptive ? 4000 : 1000;
+      if (time - this.since >= unknownTimeout) {
         this.pause("Body tracking lost. Reposition and restart the current rakat.");
       }
       return;
     }
     if (time - this.since < 600 || this.lastStable === posture) return;
     this.lastStable = posture;
+
+    if (this.adaptive) {
+      // Adaptive mode for floor/mat prostration placement
+      const advance = (expected, next) => {
+        if (posture === expected) this.phase = next;
+      };
+      switch (this.phase) {
+        case "standing":
+          if (posture === "standing") {
+            this.phase = "bow";
+          } else if (posture === "bow") {
+            this.phase = "upright";
+          } else if (posture === "sajdah") {
+            // Direct prostration if camera angle partially cut ruku
+            this.sajdahs = 1;
+            this.phase = "between";
+          }
+          break;
+        case "bow":
+          if (posture === "bow") {
+            this.phase = "upright";
+          } else if (posture === "standing") {
+            this.phase = "firstSajdah";
+          } else if (posture === "sajdah") {
+            this.sajdahs = 1;
+            this.phase = "between";
+          }
+          break;
+        case "upright":
+          if (posture === "standing") {
+            this.phase = "firstSajdah";
+          } else if (posture === "sajdah") {
+            this.sajdahs = 1;
+            this.phase = "between";
+          } else if (posture === "bow") {
+            this.phase = "bow";
+          }
+          break;
+        case "firstSajdah":
+          if (posture === "sajdah") {
+            this.sajdahs = 1;
+            this.phase = "between";
+          }
+          break;
+        case "between":
+          if (posture === "sitting") {
+            this.phase = "secondSajdah";
+          } else if (posture === "sajdah") {
+            this.sajdahs = 2;
+            this.phase = "exit";
+          } else if (posture === "standing") {
+            this.phase = "standing";
+          }
+          break;
+        case "secondSajdah":
+          if (posture === "sajdah") {
+            this.sajdahs = 2;
+            this.phase = "exit";
+          }
+          break;
+        case "exit":
+          if (posture === "sitting" || posture === "standing") {
+            this.rakats.push({ sajdahs: 2 });
+            this.sajdahs = 0;
+            this.phase = posture === "standing" ? "bow" : "standing";
+          }
+          break;
+      }
+      return;
+    }
+
     const allowed = {
       standing: ["standing", "sitting"],
       bow: ["standing", "bow"],
@@ -247,16 +321,17 @@ export function adaptiveCalibration(points, options = {}) {
 export function classifyPose(points, calibration, context = {}) {
   if (!calibration) return "unknown";
 
-  // Mode 1: Mat Mode (Phone lying flat near prostration position on the mat)
+  const isProximity = context.proximity === true || (Number.isFinite(context.proximityDistance) && context.proximityDistance <= 5.0);
+  const isOpticalProximity = context.opticalProximity === true;
+  const isCovered = context.isCovered === true;
+
+  // Body/head directly against or over camera at prostration position is always sajdah
+  if (isProximity || isOpticalProximity || isCovered) {
+    return "sajdah";
+  }
+
+  // Mode 1: Mat Mode (Phone lying flat or at prostration position on the mat)
   if (calibration.mode === "mat" || context.mode === "mat" || context.orientation === "flat") {
-    const isProximity = context.proximity === true || (Number.isFinite(context.proximityDistance) && context.proximityDistance <= 5.0);
-    const isOpticalProximity = context.opticalProximity === true;
-    const isCovered = context.isCovered === true;
-
-    if (isProximity || isOpticalProximity || isCovered) {
-      return "sajdah";
-    }
-
     const up = upperFeatures(points, 0.4);
     if (up && up.head) {
       if (context.faceScale && context.faceScale > 0.35) {
@@ -321,19 +396,19 @@ export function classifyPose(points, calibration, context = {}) {
       const headDrop = up.head.y - calibration.headY;
 
       // In Sajdah, head is very close to ground/bottom of frame
-      if (up.head.y > 0.75 && (headDrop > span * 2.2 || (up.shoulder && up.shoulder.y > 0.7))) {
+      if (up.head.y > 0.70 && (headDrop > span * 1.8 || (up.shoulder && up.shoulder.y > 0.65))) {
         return "sajdah";
       }
 
       // In Bow (ruku), head and shoulders are horizontal at mid-height
-      const torsoHorizontal = up.shoulder && Math.abs(up.shoulder.y - up.head.y) < span * 0.4;
-      if (torsoHorizontal && headDrop > span * 0.7 && up.head.y <= 0.75) {
+      const torsoHorizontal = up.shoulder && Math.abs(up.shoulder.y - up.head.y) < span * 0.45;
+      if (torsoHorizontal && headDrop > span * 0.6 && up.head.y <= 0.75) {
         return "bow";
       }
 
       // In Sitting, torso is upright but lower than standing
       const torsoUpright = up.shoulder && up.shoulder.y > up.head.y + span * 0.45;
-      if (torsoUpright && headDrop > span * 0.7 && up.head.y <= 0.75) {
+      if (torsoUpright && headDrop > span * 0.6 && up.head.y <= 0.75) {
         return "sitting";
       }
 
@@ -355,6 +430,7 @@ export function diagnosePlacement({
   pitch = 0,
   timeSinceLastDetection = 0,
   calibration = null,
+  isProstrating = false,
 } = {}) {
   if (numPoses > 1) {
     return {
@@ -365,7 +441,7 @@ export function diagnosePlacement({
     };
   }
 
-  if (lightingCondition === "dim") {
+  if (lightingCondition === "dim" && !isProstrating) {
     return {
       severity: "warning",
       code: "dim_lighting",
