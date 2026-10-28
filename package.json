@@ -6,6 +6,10 @@
     "test": "node --experimental-vm-modules --test test/*_test.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-sijda 'node --test test/firestore_rules.mjs'",
     "deploy": "node scripts/deploy_all.mjs",
+    "deploy:all": "node scripts/deploy_all.mjs",
+    "go-live": "node scripts/deploy_all.mjs",
+    "golive": "node scripts/deploy_all.mjs",
+    "release": "node scripts/deploy_all.mjs",
     "publish:play": "node scripts/publish_play_console.mjs",
     "publish:github": "node scripts/publish_github_release.mjs",
     "publish:all": "node scripts/deploy_all.mjs"
