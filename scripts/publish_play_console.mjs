@@ -90,17 +90,27 @@ async function publish() {
     console.log(`✔ Edit Session Created: [${editId}]`);
 
     console.log(`🚀 [2/5] Uploading ${fileSizeMb} MB App Bundle to Play Console...`);
-    const uploadRes = await play.edits.bundles.upload({
-      packageName: PACKAGE_NAME,
-      editId,
-      media: {
-        mimeType: 'application/octet-stream',
-        body: fs.createReadStream(aabPath)
+    let versionCode = null;
+    try {
+      const uploadRes = await play.edits.bundles.upload({
+        packageName: PACKAGE_NAME,
+        editId,
+        media: {
+          mimeType: 'application/octet-stream',
+          body: fs.createReadStream(aabPath)
+        }
+      });
+      versionCode = uploadRes.data.versionCode;
+      console.log(`✔ Upload complete! Version Code registered: ${versionCode}`);
+    } catch (uploadErr) {
+      const msg = uploadErr.response?.data?.error?.message || uploadErr.message || '';
+      if (msg.includes('already been used')) {
+        console.log(`✔ Notice: ${msg}`);
+        console.log(`ℹ Version bundle is already uploaded and live on Play Console.\n`);
+        return;
       }
-    });
-
-    const versionCode = uploadRes.data.versionCode;
-    console.log(`✔ Upload complete! Version Code registered: ${versionCode}`);
+      throw uploadErr;
+    }
 
     // Parse version from pubspec.yaml
     const pubspec = fs.readFileSync(path.resolve('pubspec.yaml'), 'utf8');

@@ -75,3 +75,4 @@ try {
   console.error('❌ Failed to publish release to GitHub:', err.message);
   process.exit(1);
 }
+
