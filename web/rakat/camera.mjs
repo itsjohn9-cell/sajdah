@@ -50,6 +50,8 @@ let frameWaitSince = null;
 let sessionId = crypto.randomUUID();
 let interruptions = 0;
 let firstObservation = null;
+let calibMultipleFrames = 0;
+let multipleFrames = 0;
 const transitions = [];
 const lightButton = $("screen-light");
 const lightStatus = $("screen-light-status");
@@ -164,8 +166,7 @@ function getSensorData() {
 function checkOpticalProximity(points, isCovered = false) {
   if (isCovered) return true;
   if (!points || !points[0]) return false;
-  const nose = points[0];
-  if (Number.isFinite(nose.z) && nose.z < -0.25) return true;
+  // Face filling the camera view close-up (< 20cm) during prostration
   if (points[7] && points[8] && Math.abs(points[7].x - points[8].x) > 0.40) return true;
   if (points[2] && points[5] && Math.abs(points[2].x - points[5].x) > 0.30) return true;
   return false;
@@ -426,16 +427,21 @@ function loop(time) {
         }
       } else if (!counter.paused && !counter.complete) {
         if (isMultiple) {
-          counter.pause("Multiple people detected. Only one person should be in camera view.");
-          status(counter.reason);
-          render();
-          frame = requestAnimationFrame(loop);
-          return;
+          multipleFrames++;
+          if (multipleFrames >= 4) {
+            counter.pause("Multiple people detected. Only one person should be in camera view.");
+            status(counter.reason);
+            render();
+            frame = requestAnimationFrame(loop);
+            return;
+          }
+        } else {
+          multipleFrames = 0;
         }
         if (points) lastPoseTime = time;
         const sensorData = getSensorData();
-        const isDimFromSajdah = lightingMonitor.condition === "dim" &&
-          (baselineCondition !== "dim" || counter.phase !== "standing");
+        const isDimFromSajdah = (lightingMonitor.condition === "dark" ||
+          (lightingMonitor.condition === "dim" && (counter.phase === "firstSajdah" || counter.phase === "between" || counter.phase === "secondSajdah")));
         const isCovered = (sensorData.proximity === true) || isDimFromSajdah;
         const opticalProx = checkOpticalProximity(points, isCovered);
         const context = {

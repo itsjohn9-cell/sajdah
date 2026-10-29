@@ -13,6 +13,8 @@ export class RakatCounter {
     this.since = 0;
     this.lastStable = "unknown";
     this.hasStood = false;
+    this.leftFirstSajdah = false;
+    this.firstSajdahTime = 0;
     this.paused = false;
     this.reason = "";
     this.lastTime = null;
@@ -33,6 +35,10 @@ export class RakatCounter {
     }
     this.lastTime = time;
     if (posture !== this.candidate) {
+      if (this.lastStable === "sajdah" && posture !== "sajdah") {
+        this.leftFirstSajdah = true;
+        this.lastStable = "unknown";
+      }
       this.candidate = posture;
       this.since = time;
     }
@@ -48,9 +54,11 @@ export class RakatCounter {
 
     if (this.adaptive) {
       // Adaptive mode for floor/mat prostration placement
-      const advance = (expected, next) => {
-        if (posture === expected) this.phase = next;
-      };
+      if (posture !== "sajdah") {
+        if (this.phase === "between" || this.phase === "secondSajdah") {
+          this.leftFirstSajdah = true;
+        }
+      }
       switch (this.phase) {
         case "standing":
           if (posture === "standing") {
@@ -62,6 +70,8 @@ export class RakatCounter {
           } else if (posture === "sajdah" && this.hasStood) {
             // Direct prostration if camera angle partially cut ruku AFTER standing was established
             this.sajdahs = 1;
+            this.firstSajdahTime = time;
+            this.leftFirstSajdah = false;
             this.phase = "between";
           }
           break;
@@ -70,8 +80,10 @@ export class RakatCounter {
             this.phase = "upright";
           } else if (posture === "standing") {
             this.phase = "firstSajdah";
-          } else if (posture === "sajdah") {
+          } else if (posture === "sajdah" && this.hasStood) {
             this.sajdahs = 1;
+            this.firstSajdahTime = time;
+            this.leftFirstSajdah = false;
             this.phase = "between";
           }
           break;
@@ -80,6 +92,8 @@ export class RakatCounter {
             this.phase = "firstSajdah";
           } else if (posture === "sajdah") {
             this.sajdahs = 1;
+            this.firstSajdahTime = time;
+            this.leftFirstSajdah = false;
             this.phase = "between";
           } else if (posture === "bow") {
             this.phase = "bow";
@@ -88,12 +102,18 @@ export class RakatCounter {
         case "firstSajdah":
           if (posture === "sajdah") {
             this.sajdahs = 1;
+            this.firstSajdahTime = time;
+            this.leftFirstSajdah = false;
             this.phase = "between";
           }
           break;
         case "between":
           if (posture === "sitting" || posture === "standing") {
+            this.leftFirstSajdah = true;
             this.phase = "secondSajdah";
+          } else if (posture === "sajdah" && (this.leftFirstSajdah || (this.firstSajdahTime && time - this.firstSajdahTime >= 1000))) {
+            this.sajdahs = 2;
+            this.phase = "exit";
           }
           break;
         case "secondSajdah":
@@ -103,9 +123,10 @@ export class RakatCounter {
           }
           break;
         case "exit":
-          if (posture === "sitting" || posture === "standing") {
+          if (posture === "sitting" || posture === "standing" || posture !== "sajdah") {
             this.rakats.push({ sajdahs: 2 });
             this.sajdahs = 0;
+            this.leftFirstSajdah = false;
             this.hasStood = posture === "standing";
             this.phase = posture === "standing" ? "bow" : "standing";
           }
@@ -169,6 +190,8 @@ export class RakatCounter {
     this.lastTime = null;
     this.since = 0;
     this.hasStood = false;
+    this.leftFirstSajdah = false;
+    this.firstSajdahTime = 0;
     this.paused = false;
     this.reason = "";
   }
@@ -557,7 +580,7 @@ export function selectPrimaryPose(poses) {
   }).sort((a, b) => b.score - a.score);
 
   // If the top pose is far more prominent (e.g. 2x score of reflection), track top pose
-  if (scored[0].score > scored[1].score * 2.0 && scored[1].score < 4.5) {
+  if (scored[0].score >= scored[1].score * 2.0 || scored[1].score < 3.5) {
     return { pose: scored[0].pose, isMultiple: false };
   }
 

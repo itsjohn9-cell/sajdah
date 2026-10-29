@@ -349,3 +349,58 @@ test("Scenario 13: Full 2-Rakat prayer when Jalsah appears as standing from unde
   assert.equal(s.counter.sajdahs, 0);
 });
 
+test("Scenario 14: Replay real S24 Ultra feedback - second sajdah counted and rakat completes without getting stuck", () => {
+  // Replay exact user transition sequence from feedback report sessionId 31c42319-5946-49a8-9ad8-c614f58ceae1
+  const counter = new RakatCounter(2, { adaptive: true });
+
+  // 1. Frame 0: user leaning over phone to tap start
+  counter.observe("sajdah", 100);
+  counter.observe("sajdah", 700);
+  assert.equal(counter.sajdahs, 0, "Initial phone setup proximity must not count sajdah before standing");
+
+  // 2. User stands upright in Qiyam
+  counter.observe("standing", 1500);
+  counter.observe("standing", 2200);
+  assert.equal(counter.phase, "bow");
+  assert.equal(counter.sajdahs, 0, "Standing in Qiyam recitation must not trigger sajdah");
+
+  // 3. User bows and drops to first Sajdah
+  counter.observe("standing", 2800);
+  counter.observe("sajdah", 3500);
+  counter.observe("sajdah", 4200);
+  assert.equal(counter.sajdahs, 1, "First sajdah must be recorded");
+  assert.equal(counter.phase, "between");
+
+  // 4. User rises up to Jalsah (sitting between two sajdahs viewed from prostration spot)
+  // Even if brief or fluctuating
+  counter.observe("standing", 5000);
+  counter.observe("standing", 5200);
+
+  // 5. User prostrates for second Sajdah
+  counter.observe("sajdah", 5800);
+  counter.observe("sajdah", 6600);
+  assert.equal(counter.sajdahs, 2, "Second sajdah MUST be recorded and not remain stuck at 1!");
+  assert.equal(counter.phase, "exit");
+
+  // 6. User rises from second sajdah to stand for Rakat 2
+  counter.observe("standing", 7500);
+  counter.observe("standing", 8200);
+  assert.equal(counter.rakats.length, 1, "Rakat 1 must be completed!");
+  assert.equal(counter.sajdahs, 0, "Sajdah counter must reset for next rakat");
+
+  // 7. Rakat 2: user performs two sajdahs and finishes
+  counter.observe("sajdah", 9000);
+  counter.observe("sajdah", 9700);
+  assert.equal(counter.sajdahs, 1);
+  counter.observe("standing", 10400);
+  counter.observe("sajdah", 11100);
+  counter.observe("sajdah", 11800);
+  assert.equal(counter.sajdahs, 2);
+
+  // Final Tashahhud
+  counter.observe("sitting", 12500);
+  counter.observe("sitting", 13200);
+  assert.equal(counter.rakats.length, 2, "Both rakats completed successfully!");
+  assert.equal(counter.complete, true);
+});
+

@@ -75,3 +75,4 @@ When authoring code, UI strings, documentation, or unit tests:
 1. Refer to this document before choosing any transliterated spelling.
 2. Maintain English fidelity to Ayatullah Sistani's *Islamic Laws*.
 3. Keep test identifiers backwards-compatible while updating user-facing descriptions.
+
