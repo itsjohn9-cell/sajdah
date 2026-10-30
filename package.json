@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --experimental-vm-modules --test test/*_test.mjs",
+    "benchmark": "node scripts/run_video_benchmark.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-sijda 'node --test test/firestore_rules.mjs'",
     "deploy": "node scripts/deploy_all.mjs",
     "deploy:all": "node scripts/deploy_all.mjs",
