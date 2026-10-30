@@ -48,3 +48,4 @@ This specification documents the standard benchmark suite used to evaluate and v
    - Prolonged holding in Sajdah ("Body tracking lost").
    - Transient landmark flicker during posture transitions.
 4. **Transition Continuity:** Every Rakat exits cleanly into either Qiyam (for subsequent rakat) or Tashahhud sitting (at completion).
+

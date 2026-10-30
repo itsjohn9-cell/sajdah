@@ -74,3 +74,4 @@ test("Video Benchmark Suite: Evaluation across 10 multi-angle, optical & placeme
   assert.equal(results.length, BENCHMARK_SCENARIOS.length);
   assert.ok(results.every(r => r.passed));
 });
+
