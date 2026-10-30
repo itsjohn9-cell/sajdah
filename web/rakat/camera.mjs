@@ -427,8 +427,9 @@ function loop(time) {
         }
       } else if (!counter.paused && !counter.complete) {
         if (isMultiple) {
+          const threshold = (counter.phase === "firstSajdah" || counter.phase === "between" || counter.phase === "secondSajdah" || counter.phase === "exit") ? 15 : 8;
           multipleFrames++;
-          if (multipleFrames >= 4) {
+          if (multipleFrames >= threshold) {
             counter.pause("Multiple people detected. Only one person should be in camera view.");
             status(counter.reason);
             render();

@@ -35,7 +35,7 @@ export class RakatCounter {
     }
     this.lastTime = time;
     if (posture !== this.candidate) {
-      if (this.lastStable === "sajdah" && posture !== "sajdah") {
+      if (this.lastStable === "sajdah" && (posture === "sitting" || posture === "standing")) {
         this.leftFirstSajdah = true;
         this.lastStable = "unknown";
       }
@@ -43,6 +43,11 @@ export class RakatCounter {
       this.since = time;
     }
     if (posture === "unknown") {
+      // During prostration phases in adaptive mode, worshipper is occluded near the floor.
+      // Do not time out and pause tracking while the worshipper is prostrating or between sajdahs.
+      if (this.adaptive && (this.sajdahs > 0 || this.phase === "firstSajdah" || this.phase === "between" || this.phase === "secondSajdah" || this.phase === "exit")) {
+        return;
+      }
       const unknownTimeout = this.adaptive ? 4000 : 1000;
       if (time - this.since >= unknownTimeout) {
         this.pause("Body tracking lost. Reposition and restart the current rakat.");
@@ -364,13 +369,27 @@ export function classifyPose(points, calibration, context = {}) {
   if (calibration.mode === "mat" || context.mode === "mat" || context.orientation === "flat") {
     const up = upperFeatures(points, 0.4);
     if (up && up.head) {
-      if (context.faceScale && context.faceScale > 0.35) {
+      // Upright face close to camera is sitting (Jalsah / Tashahhud)
+      if (context.faceScale && context.faceScale > 0.35 && (!up.shoulder || up.head.y < up.shoulder.y)) {
         return "sitting";
       }
-      if (up.shoulder && Math.abs(up.head.y - up.shoulder.y) < 0.08) {
+      // Horizontal torso at mid-height is bow (Ruku)
+      const isBow = up.shoulder && Math.abs(up.head.y - up.shoulder.y) < 0.08 && up.head.y < 0.65;
+      if (isBow) {
         return "bow";
       }
+      // Head descending to the mat at or below shoulder height is sajdah
+      const isSajdah = up.head.y >= 0.65 ||
+        (up.shoulder && up.head.y >= up.shoulder.y - 0.05 && up.head.y >= 0.50) ||
+        (calibration.headY && up.head.y >= calibration.headY + 0.25 && (!up.shoulder || up.head.y >= up.shoulder.y - 0.05));
+      if (isSajdah) {
+        return "sajdah";
+      }
       return "standing";
+    }
+
+    if (points && points[0] && visible(points[0], 0.35) && points[0].y >= 0.60) {
+      return "sajdah";
     }
 
     if (context.personVisible === false) {
@@ -579,9 +598,19 @@ export function selectPrimaryPose(poses) {
     return { pose, score };
   }).sort((a, b) => b.score - a.score);
 
-  // If the top pose is far more prominent (e.g. 2x score of reflection), track top pose
-  if (scored[0].score >= scored[1].score * 2.0 || scored[1].score < 3.5) {
-    return { pose: scored[0].pose, isMultiple: false };
+  const top = scored[0];
+  const second = scored[1];
+
+  // Genuinely multiple people requires two substantial, full-body poses of comparable visibility.
+  // Reflections on marble/tiles, shadows, or distant background figures are ignored in favor of the primary worshipper.
+  const isGenuineMultiple = (
+    top.score >= 10 &&
+    second.score >= 10 &&
+    top.score < second.score * 1.5
+  );
+
+  if (!isGenuineMultiple) {
+    return { pose: top.pose, isMultiple: false };
   }
 
   // Genuinely multiple people in frame

@@ -404,3 +404,115 @@ test("Scenario 14: Replay real S24 Ultra feedback - second sajdah counted and ra
   assert.equal(counter.complete, true);
 });
 
+test("Scenario 15: Replay Report 5 - floor reflection during bow does not trigger false multiple people or abort prayer", () => {
+  // Worshipper in bow pose
+  const bowPerson = upperBodyLandmarks({ headY: 0.48, shoulderY: 0.50 });
+  for (let i = 0; i <= 24; i++) {
+    if (bowPerson[i]) bowPerson[i].visibility = 0.9;
+  }
+  // Secondary ghost pose / reflection on polished tiles with lower confidence (~score 6.5)
+  const floorReflection = Array.from({ length: 33 }, () => ({ x: 0.4, y: 0.8, z: 0, visibility: 0.28 }));
+  floorReflection[0] = { x: 0.45, y: 0.82, z: 0, visibility: 0.45 };
+  floorReflection[11] = { x: 0.42, y: 0.85, z: 0, visibility: 0.42 };
+  floorReflection[12] = { x: 0.48, y: 0.85, z: 0, visibility: 0.40 };
+
+  const { pose, isMultiple } = selectPrimaryPose([bowPerson, floorReflection]);
+  assert.equal(isMultiple, false, "Must not flag multiple people on floor reflection");
+  assert.ok(pose, "Must track worshipper in bow");
+
+  const cal = { mode: "mat", orientation: "flat" };
+  const posture = classifyPose(pose, cal, { mode: "mat", orientation: "flat" });
+  assert.equal(posture, "bow", "Must classify as bow");
+});
+
+test("Scenario 16: Replay Report 6 - Screen light on mat mode detects sajdah by pose and avoids body tracking timeout during prolonged prostration", () => {
+  const matCal = { mode: "mat", orientation: "flat", headY: 0.25 };
+  const screenLightContext = {
+    mode: "mat",
+    orientation: "flat",
+    proximity: false,
+    opticalProximity: false,
+    isCovered: false, // screen light lit up scene, so condition is normal (not dark/dim)
+  };
+
+  // 1. Standing in Qiyam
+  const standing = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.38 });
+  assert.equal(classifyPose(standing, matCal, screenLightContext), "standing");
+
+  // 2. Bowing in Ruku
+  const bowing = upperBodyLandmarks({ headY: 0.48, shoulderY: 0.50 });
+  assert.equal(classifyPose(bowing, matCal, screenLightContext), "bow");
+
+  // 3. Prostrating in Sajdah: Head low on floor near bottom of frame
+  const prostrating = upperBodyLandmarks({ headY: 0.72, shoulderY: 0.65 });
+  assert.equal(classifyPose(prostrating, matCal, screenLightContext), "sajdah", "Pose-based sajdah must be detected even with screen light on");
+
+  // Verify counter session over full prolonged prostrations (>5000ms in Sujud)
+  const counter = new RakatCounter(2, { adaptive: true });
+  counter.observe("standing", 1000);
+  counter.observe("standing", 1800);
+  assert.equal(counter.phase, "bow");
+
+  counter.observe("bow", 2500);
+  counter.observe("bow", 3200);
+
+  // Enter Sajdah 1
+  counter.observe("sajdah", 4000);
+  counter.observe("sajdah", 4700);
+  assert.equal(counter.sajdahs, 1);
+  assert.equal(counter.phase, "between");
+
+  // Forehead on floor for 6 seconds (Dhikr / Dua in Sujud) where tracking becomes unknown
+  for (let t = 5000; t <= 11000; t += 1000) {
+    counter.observe("unknown", t);
+    assert.equal(counter.paused, false, `Must NOT pause with body tracking lost during prostration at ${t}ms`);
+  }
+  assert.equal(counter.sajdahs, 1);
+
+  // Sit up into Jalsah
+  counter.observe("sitting", 12000);
+  counter.observe("sitting", 12800);
+  assert.equal(counter.phase, "secondSajdah");
+
+  // Enter Sajdah 2
+  counter.observe("sajdah", 13600);
+  counter.observe("sajdah", 14300);
+  assert.equal(counter.sajdahs, 2);
+  assert.equal(counter.phase, "exit");
+
+  // Prolonged second Sajdah (5 seconds with unknown tracking while prostrating)
+  for (let t = 15000; t <= 20000; t += 1000) {
+    counter.observe("unknown", t);
+    assert.equal(counter.paused, false, `Must NOT pause during second sajdah at ${t}ms`);
+  }
+
+  // Tashahhud / rise to Rakat 2
+  counter.observe("sitting", 21000);
+  counter.observe("sitting", 21800);
+  assert.equal(counter.rakats.length, 1, "Rakat 1 must complete successfully");
+  assert.equal(counter.sajdahs, 0);
+
+  // Rakat 2
+  counter.observe("standing", 22500);
+  counter.observe("standing", 23200);
+  counter.observe("bow", 24000);
+  counter.observe("bow", 24700);
+  counter.observe("sajdah", 25500);
+  counter.observe("sajdah", 26200);
+  assert.equal(counter.sajdahs, 1);
+
+  counter.observe("sitting", 27000);
+  counter.observe("sitting", 27700);
+
+  counter.observe("sajdah", 28500);
+  counter.observe("sajdah", 29200);
+  assert.equal(counter.sajdahs, 2);
+
+  // Final Tashahhud / completion
+  counter.observe("sitting", 30000);
+  counter.observe("sitting", 30700);
+  assert.equal(counter.rakats.length, 2, "Both rakats completed successfully");
+  assert.equal(counter.complete, true);
+  assert.equal(counter.paused, false);
+});
+

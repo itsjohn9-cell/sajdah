@@ -64,18 +64,8 @@ try {
     console.log('⏩ [2/5] Skipping build step (--skip-build passed)...\n');
   }
 
-  // Step 3: Google Play Console Release
-  console.log('📱 [3/5] Uploading & Publishing to Google Play Console...');
-  execSync('node scripts/publish_play_console.mjs', { stdio: 'inherit' });
-  console.log('✔ Published to Google Play!\n');
-
-  // Step 4: GitHub Releases Upload
-  console.log('🐙 [4/5] Uploading APK to GitHub Releases...');
-  execSync('node scripts/publish_github_release.mjs', { stdio: 'inherit' });
-  console.log('✔ Uploaded APKs to GitHub Releases!\n');
-
-  // Step 5: Git Push to GitHub main branch
-  console.log('🌿 [5/5] Synchronizing latest project updates to GitHub main branch...');
+  // Step 3: Git Commit & Push to GitHub main branch
+  console.log('🌿 [3/5] Synchronizing latest project updates to GitHub main branch...');
   try {
     const status = execSync('git status --porcelain').toString().trim();
     if (status) {
@@ -89,6 +79,16 @@ try {
   } catch (gitErr) {
     console.warn('⚠️ Git push to main warning:', gitErr.message);
   }
+
+  // Step 4: Google Play Console Release
+  console.log('📱 [4/5] Uploading & Publishing to Google Play Console...');
+  execSync('node scripts/publish_play_console.mjs', { stdio: 'inherit' });
+  console.log('✔ Published to Google Play!\n');
+
+  // Step 5: GitHub Releases Upload
+  console.log('🐙 [5/5] Uploading APK to GitHub Releases...');
+  execSync('node scripts/publish_github_release.mjs', { stdio: 'inherit' });
+  console.log('✔ Uploaded APKs to GitHub Releases!\n');
 
   console.log('========================================================');
   console.log('🎉 UNIFIED DEPLOYMENT COMPLETED SUCCESSFULLY!           ');
