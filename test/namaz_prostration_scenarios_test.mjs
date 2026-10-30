@@ -516,3 +516,56 @@ test("Scenario 16: Replay Report 6 - Screen light on mat mode detects sajdah by 
   assert.equal(counter.paused, false);
 });
 
+test("Scenario 17: Shia Qunoot in Rakat 2 (raising hands before face during standing) maintains standing posture", () => {
+  const matCal = { mode: "mat", orientation: "flat", headY: 0.22 };
+  
+  // Qunoot posture: Standing upright, hands raised to chest/chin level (wrists near Y=0.32, head high at Y=0.22)
+  const qunootPose = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.38, hipY: 0.65 });
+  qunootPose[15] = { x: 0.45, y: 0.32, z: -0.1, visibility: 0.9 };
+  qunootPose[16] = { x: 0.55, y: 0.32, z: -0.1, visibility: 0.9 };
+
+  const posture = classifyPose(qunootPose, matCal, { mode: "mat", orientation: "flat" });
+  assert.equal(posture, "standing", "Qunoot with raised hands must remain classified as standing");
+
+  // Verify counter progression through Rakat 2 with Qunoot
+  const counter = new RakatCounter(2, { adaptive: true });
+  // Rakat 1
+  counter.observe("standing", 1000);
+  counter.observe("standing", 1800);
+  counter.observe("bow", 2500);
+  counter.observe("bow", 3200);
+  counter.observe("sajdah", 4000);
+  counter.observe("sajdah", 4700);
+  counter.observe("sitting", 5400);
+  counter.observe("sajdah", 6100);
+  counter.observe("sajdah", 6800);
+  counter.observe("standing", 7500);
+  counter.observe("standing", 8200);
+  assert.equal(counter.rakats.length, 1);
+
+  // Rakat 2: Recitation in standing
+  counter.observe("standing", 9000);
+  counter.observe("standing", 9800);
+
+  // Qunoot: 8 seconds of hands raised before face in supplication
+  for (let t = 10500; t <= 18500; t += 1000) {
+    counter.observe("standing", t);
+    assert.equal(counter.paused, false);
+    assert.equal(counter.phase, "bow");
+  }
+
+  // Bow after Qunoot
+  counter.observe("bow", 19500);
+  counter.observe("bow", 20200);
+  counter.observe("sajdah", 21000);
+  counter.observe("sajdah", 21700);
+  counter.observe("sitting", 22500);
+  counter.observe("sajdah", 23200);
+  counter.observe("sajdah", 23900);
+  counter.observe("sitting", 24600);
+  counter.observe("sitting", 25300);
+
+  assert.equal(counter.rakats.length, 2);
+  assert.equal(counter.complete, true);
+});
+
