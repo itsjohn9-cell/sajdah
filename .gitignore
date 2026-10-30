@@ -68,3 +68,9 @@ app.*.map.json
 
 # Local iOS/Firebase configuration
 ios/Runner/GoogleService-Info.plist
+
+# Local Python & Video fixtures
+.venv/
+test/fixtures/videos/
+*.mp4
+

@@ -188,6 +188,10 @@ To solve this without requiring full-body stock videos, Sajdah implements a robu
 - **Validation:** Validated that Sajdah's Mode 1 (Mat Mode) and adaptive calibration directly resolve the upward perspective geometry without needing distance cameras. Confirmed universal 6-phase sequence invariant across all Islamic traditions.
 - **Status:** **Integrated & Documented.**
 
+### Finding 7: Graceful Upper-Body Fallback (`torsoSpan`) during Ruku & Loose Clothing
+- **Problem Discovered:** In video `WZk197Rf5LQ` (side/diagonal view), when the demonstrator bowed into Ruku (68s–80s), visibility of ankles and knees dropped below 0.55 due to self-occlusion and loose thobe cloth. `sideFeatures` returned null. Furthermore, Mode 4 (upper-body fallback) requires `calibration.torsoSpan`. Because calibration had occurred in `side` mode, `torsoSpan` was undefined, causing all bowing frames to classify as `unknown` and trigger an interruption pause.
+- **Solution:** Added `torsoSpan: Math.abs(side.hip.y - side.shoulder.y)` to `standingCalibration` across all calibration modes (`full` and `side`). When leg/ankle visibility drops during bow or due to floor crops, the classifier seamlessly falls back to upper-body relative geometry, correctly detecting `bow`, `sajdah`, and `standing` without missing a beat.
+
 ---
 
 ## 7. Automated Benchmark Suite & Verification
@@ -208,4 +212,53 @@ The benchmark suite (`npm run benchmark`) evaluates 10 production scenarios:
 | **BM-10** | Backlit Silhouette with Low Facial Contrast | Condition C5 | 159 | **PASS (100%)** |
 
 **Current Benchmark Accuracy:** **100% (10/10 scenarios passed, 1,651 frames evaluated, 0 false pauses).**
+
+---
+
+## 8. Real Internet Video Benchmark Replay (`WZk197Rf5LQ`)
+
+Automated in `test/youtube_prayer_test.mjs`:
+- **Source:** *Time to Pray with Zaky - 2 Rakat Guide* (`https://www.youtube.com/watch?v=WZk197Rf5LQ`).
+- **Telemetry:** 1,549 frames extracted across 309.7 seconds at 5 Hz (200ms intervals) via MediaPipe PoseLandmarker.
+- **Trajectory:**
+  - `[00:07.6s]`: Calibrated standing side-profile (`mode: side`, `height: 0.399`, `torsoSpan: 0.163`).
+  - `[00:08.2s]`: Qiyam detected.
+  - `[00:69.4s]`: Ruku (Bow) detected.
+  - `[00:82.2s]`: Qaumah (Standing after Ruku) detected.
+  - `[00:89.8s]`: Sajdah 1 detected.
+  - `[01:06.4s]`: Sajdah 2 detected -> **Rakat 1 completed** (01:15.6s).
+  - `[01:17.0s]`: Rakat 2 Qiyam (Standing) detected.
+  - `[01:76.6s]`: Rakat 2 Ruku (Bow) detected.
+  - `[01:86.8s]`: Rakat 2 Qaumah (Standing) detected.
+  - `[01:99.6s]`: Rakat 2 Sajdah 1 detected.
+  - `[02:10.2s]`: Rakat 2 Sajdah 2 detected.
+  - `[02:19.8s]`: Tashahhud / Salaam (Sitting) detected -> **Rakat 2 completed**.
+- **Final Result:** Completed Rakats: **2/2**, Sajdahs: **4/4**, Paused: **false**, Complete: **true**.
+
+---
+
+## 9. Real Internet Video Benchmark Replay (`hndtN2NH4uc`)
+
+Automated in `test/youtube_fajr_walkthrough_test.mjs`:
+- **Source:** *Fajr Prayer Walkthrough* (`https://www.youtube.com/watch?v=hndtN2NH4uc`).
+- **Telemetry:** 1,529 raw frames extracted across 305.6 seconds at 5 Hz (200ms intervals) via MediaPipe PoseLandmarker.
+- **Angle / Perspective:** Front-facing camera view with slight downward angle, worshipper praying on carpet mat with loose Islamic attire.
+- **Natural Stream (Zero Synthetic Fills):**
+  - `[00:22.4s]`: Calibrated standing (`mode: upper`, `headY: 0.034`, `shoulderY: 0.159`, `torsoSpan: 0.125`).
+  - `[01:19.4s]`: Rakat 1 Bow (Ruku) detected.
+  - `[01:25.0s]`: Rakat 1 Standing (Qaumah) detected.
+  - `[01:31.8s]`: Rakat 1 Sajdah 1 detected.
+  - `[01:39.6s]`: Rakat 1 Jalsah (Sitting between prostrations) detected.
+  - `[01:45.4s]`: Rakat 1 Sajdah 2 detected.
+  - `[01:52.2s]`: Rakat 1 Jalsah al-Istirahah (Brief sitting before rising) detected.
+  - `[01:59.2s]`: Standing for Rakat 2 -> **Rakat 1 completed** (01:59.2s).
+  - `[02:28.6s]`: Rakat 2 Bow (Ruku) detected.
+  - `[02:33.8s]`: Rakat 2 Standing (Qaumah) detected.
+  - `[02:40.0s]`: Rakat 2 Sajdah 1 detected.
+  - `[02:47.8s]`: Rakat 2 Jalsah detected.
+  - `[02:52.4s]`: Rakat 2 Sajdah 2 detected.
+  - `[02:59.2s]`: Final Tashahhud & Taslim (Sitting) detected -> **Rakat 2 completed**.
+- **Final Result:** Completed Rakats: **2/2**, Sajdahs: **4/4**, Paused: **false**, Complete: **true** (100% natural, unmodified video replay).
+
+
 

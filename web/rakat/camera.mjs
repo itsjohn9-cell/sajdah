@@ -389,11 +389,16 @@ function loop(time) {
       const { pose: points, isMultiple } = selectPrimaryPose(result.landmarks);
       if (calibrating) {
         if (isMultiple) {
-          calibrationSince = null;
-          baseline = null;
-          status("Setup: one full body must be visible. Multiple people detected. Only one person should be in camera view.");
-          frame = requestAnimationFrame(loop);
-          return;
+          calibMultipleFrames++;
+          if (calibMultipleFrames >= 8) {
+            calibrationSince = null;
+            baseline = null;
+            status("Setup: one full body must be visible. Multiple people detected. Only one person should be in camera view.");
+            frame = requestAnimationFrame(loop);
+            return;
+          }
+        } else {
+          calibMultipleFrames = 0;
         }
         const sample = standingCalibration(points, { allowAdaptive: true, orientation, pitch: devicePitch });
         const stable = sample && (!baseline ||

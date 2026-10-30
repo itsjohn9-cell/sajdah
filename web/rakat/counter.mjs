@@ -289,7 +289,15 @@ export function standingCalibration(points, options = {}) {
         f.hip.y < f.knee.y - height * 0.12 &&
         f.knee.y < f.ankle.y - height * 0.12 &&
         Math.abs(f.shoulder.x - f.ankle.x) <= height * 0.25) {
-      return { mode: "full", height, hipY: f.hip.y, ankleY: f.ankle.y, headY: f.head.y, shoulderY: f.shoulder.y };
+      return {
+        mode: "full",
+        height,
+        hipY: f.hip.y,
+        ankleY: f.ankle.y,
+        headY: f.head.y,
+        shoulderY: f.shoulder.y,
+        torsoSpan: Math.abs(f.hip.y - f.shoulder.y),
+      };
     }
   }
 
@@ -325,6 +333,7 @@ export function adaptiveCalibration(points, options = {}) {
       ankleY: side.ankle.y,
       headY: side.head.y,
       shoulderY: side.shoulder.y,
+      torsoSpan: Math.abs(side.hip.y - side.shoulder.y),
     };
   }
 
@@ -602,11 +611,11 @@ export function selectPrimaryPose(poses) {
   const second = scored[1];
 
   // Genuinely multiple people requires two substantial, full-body poses of comparable visibility.
-  // Reflections on marble/tiles, shadows, or distant background figures are ignored in favor of the primary worshipper.
+  // Reflections on marble/tiles, ceiling lights, shadows, or background graphics are ignored in favor of the primary worshipper.
   const isGenuineMultiple = (
-    top.score >= 10 &&
-    second.score >= 10 &&
-    top.score < second.score * 1.5
+    top.score >= 20 &&
+    second.score >= 20 &&
+    Math.abs(top.score - second.score) < 1.5
   );
 
   if (!isGenuineMultiple) {
