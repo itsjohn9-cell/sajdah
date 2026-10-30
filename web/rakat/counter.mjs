@@ -35,7 +35,7 @@ export class RakatCounter {
     }
     this.lastTime = time;
     if (posture !== this.candidate) {
-      if (this.lastStable === "sajdah" && (posture === "sitting" || posture === "standing")) {
+      if (this.lastStable === "sajdah" && posture !== "sajdah") {
         this.leftFirstSajdah = true;
         this.lastStable = "unknown";
       }
@@ -113,7 +113,7 @@ export class RakatCounter {
           }
           break;
         case "between":
-          if (posture === "sitting" || posture === "standing") {
+          if (posture === "sitting" || posture === "standing" || posture === "bow") {
             this.leftFirstSajdah = true;
             this.phase = "secondSajdah";
           } else if (posture === "sajdah" && (this.leftFirstSajdah || (this.firstSajdahTime && time - this.firstSajdahTime >= 1000))) {

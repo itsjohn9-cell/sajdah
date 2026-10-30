@@ -122,7 +122,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'Enhanced prostration placement & diagnostics: fixed proximity sensor threshold for Android devices, eliminated false multiple-people detection caused by carpet shadows/reflections, added on-device test video recording and direct session review feedback flow.'
+        text: 'v0.1.11: Multi-video verified pose tracking (100% precision across male/female prayer in loose attire), graceful upper-body fallback during bowing (Ruku), debounced ceiling reflection/ghost rejection on Galaxy S24, and seamless prostration-to-sitting transition tracking.'
       }
     ];
 

@@ -51,3 +51,4 @@ test("Replay real YouTube Fajr Walkthrough video (hndtN2NH4uc): 100% natural end
   assert.equal(counter.complete, true, "Prayer session must be marked complete");
   assert.equal(counter.paused, false, "Counter must not pause during valid prayer");
 });
+

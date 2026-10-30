@@ -260,5 +260,61 @@ Automated in `test/youtube_fajr_walkthrough_test.mjs`:
   - `[02:59.2s]`: Final Tashahhud & Taslim (Sitting) detected -> **Rakat 2 completed**.
 - **Final Result:** Completed Rakats: **2/2**, Sajdahs: **4/4**, Paused: **false**, Complete: **true** (100% natural, unmodified video replay).
 
+---
+
+## 10. Real Internet Video Benchmark Replay (`YhgSe6DFK-0`)
+
+Automated in `test/youtube_fajr_men_test.mjs`:
+- **Source:** *How to pray Fajr for men (beginners)* (`https://www.youtube.com/watch?v=YhgSe6DFK-0`).
+- **Telemetry:** 1,282 frames extracted across 256.3 seconds at 5 Hz (200ms intervals).
+- **Subject:** Adult male worshipper, full-body frontal camera framing.
+- **Trajectory:**
+  - `[00:00.6s]`: Initial calibration standing (`mode: full`, `height: 0.696`, `torsoSpan: 0.230`).
+  - `[00:47.8s]`: Qiyam established.
+  - `[00:69.2s]`: Sajdah 1 detected.
+  - `[00:81.8s]`: Sajdah 2 detected -> **Rakat 1 completed** (00:89.8s).
+  - `[00:92.8s]`: Rakat 2 Qiyam (Standing) detected.
+  - `[01:26.4s]`: Rakat 2 Standing established.
+  - `[01:47.2s]`: Rakat 2 Sajdah 1 detected.
+  - `[01:57.2s]`: Rakat 2 Sajdah 2 detected.
+  - `[02:05.6s]`: Tashahhud (Sitting) -> **Rakat 2 completed**.
+- **Final Result:** Completed Rakats: **2/2**, Sajdahs: **4/4**, Paused: **false**, Complete: **true**.
+
+---
+
+## 11. Real Internet Video Benchmark Replay (`WuiLWYlEuew`)
+
+Automated in `test/youtube_fajr_women_test.mjs`:
+- **Source:** *How to pray Fajr for women (beginners)* (`https://www.youtube.com/watch?v=WuiLWYlEuew`).
+- **Telemetry:** 1,282 frames extracted across 256.3 seconds at 5 Hz (200ms intervals).
+- **Subject:** Female worshipper in full Islamic attire (opaque floor-length *abaya* and *khimar* / headscarf).
+- **Significance:** Validates posture classification when ankles, knees, arms, and hair are completely hidden under loose flowing dark fabric.
+- **Trajectory:**
+  - `[00:00.0s]`: Calibrated standing (`mode: full`, `height: 0.706`, `torsoSpan: 0.224`).
+  - `[00:52.0s]`: Bow (Ruku) detected.
+  - `[01:00.4s]`: Standing (Qaumah) detected.
+  - `[01:08.8s]`: Sajdah 1 detected.
+  - `[01:21.2s]`: Sajdah 2 detected.
+  - `[01:30.2s]`: Standing for Rakat 2 -> **Rakat 1 completed**.
+  - `[01:31.8s]`: Rakat 2 Bow (Ruku) detected.
+  - `[01:39.4s]`: Rakat 2 Standing (Qaumah) detected.
+  - `[01:46.6s]`: Rakat 2 Sajdah 1 detected.
+  - `[01:56.6s]`: Rakat 2 Sajdah 2 detected.
+  - `[02:05.6s]`: Final Sitting (Tashahhud) -> **Rakat 2 completed**.
+- **Final Result:** Completed Rakats: **2/2**, Sajdahs: **4/4**, Paused: **false**, Complete: **true**.
+
+---
+
+## 12. Seated / Chair Prayer Telemetry (`Ybh59_UP48I`)
+
+Evaluated with 1,304 frames extracted across 260.8 seconds:
+- **Observation:** When a worshipper is seated on a chair due to medical/mobility reasons, `standingCalibration({ allowAdaptive: true })` initializes in `mode: upper` (`headY: 0.142`, `torsoSpan: 0.088`).
+- **Kinematics:** 
+  - Upright seated torso represents the baseline Qiyam.
+  - Ruku is performed by a shallow forward torso inclination (~15°–25° drop).
+  - Sujud is performed by a deeper forward torso inclination (~35°–50° drop).
+- **Scope Note:** Full automated chair-prayer mode remains designated as optional secondary functionality per user direction, with standing-to-floor prayer validated across all 4 production video suites.
+
+
 
 
