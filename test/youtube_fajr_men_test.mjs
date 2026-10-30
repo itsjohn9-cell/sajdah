@@ -55,3 +55,4 @@ test("Replay real YouTube Fajr Men Beginners video (YhgSe6DFK-0): counts 2 Rakat
   assert.equal(counter.complete, true, "Prayer session must be marked complete");
   assert.equal(counter.paused, false, "Counter must not pause during valid prayer");
 });
+

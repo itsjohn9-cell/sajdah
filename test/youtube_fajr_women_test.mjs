@@ -53,3 +53,4 @@ test("Replay real YouTube Fajr Women Beginners video (WuiLWYlEuew): full abaya/h
   assert.equal(counter.complete, true, "Prayer session must be marked complete");
   assert.equal(counter.paused, false, "Counter must not pause during valid prayer");
 });
+
