@@ -122,7 +122,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'v0.1.12: Added haptic feedback pulses on Tasbeeh beads and prayer movements, offline JSON data backup and restore, Qaza completion projections, prayer doubts (Shakeyat al-Salat) reference guide, and UI responsiveness improvements.'
+        text: 'v0.1.13: Hands-free Voice Mode for Tasbeeh counting by speech recognition (Allahu Akbar, Alhamdulillah, SubhanAllah), unified modern Islamic emerald UI theme, and audio permission support.'
       }
     ];
 

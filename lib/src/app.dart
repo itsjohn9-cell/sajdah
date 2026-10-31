@@ -55,19 +55,7 @@ class _SijdaHomeState extends State<SijdaHome> {
         return Scaffold(
           appBar: AppBar(
             title: Text(_tab == 2 ? 'Tasbeeh Counter' : 'Sajdah'),
-            centerTitle: _tab == 2,
-            foregroundColor: _tab == 2 ? Colors.white : null,
-            flexibleSpace: _tab == 2
-                ? const SizedBox.expand(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [tasbeehPlum, tasbeehOrange],
-                        ),
-                      ),
-                    ),
-                  )
-                : null,
+            centerTitle: true,
             leading: _tab == 2
                 ? IconButton(
                     tooltip: 'Back to home',
@@ -81,7 +69,7 @@ class _SijdaHomeState extends State<SijdaHome> {
                 onPressed: () => showAboutDialog(
                   context: context,
                   applicationName: 'Sajdah',
-                  applicationVersion: '0.1.12',
+                  applicationVersion: '0.1.13',
                   children: [
                     const Text(
                       'A quiet companion for your daily worship.\n\n'
@@ -356,8 +344,8 @@ class _SijdaHomeState extends State<SijdaHome> {
           Icons.touch_app_outlined,
           'Tasbeeh',
           'A little remembrance',
-          tasbeehPlum,
-          const Color(0xFFF7EBF3),
+          const Color(0xFF0F4C3A),
+          const Color(0xFFE8F3EE),
           2,
         ),
         (

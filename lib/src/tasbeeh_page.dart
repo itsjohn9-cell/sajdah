@@ -1,25 +1,180 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import 'store.dart';
 import 'beep_sound.dart';
 
-const tasbeehPlum = Color(0xFF61164F);
-const tasbeehOrange = Color(0xFFD58B56);
-const _ink = Color(0xFF303747);
+const sajdaEmerald = Color(0xFF0F4C3A);
+const sajdaEmeraldLight = Color(0xFF165B47);
+const sajdaGold = Color(0xFFC5A059);
+const _ink = Color(0xFF1B2A24);
 
-class TasbeehPage extends StatelessWidget {
+class TasbeehPage extends StatefulWidget {
   const TasbeehPage({super.key, required this.store, this.playBeep});
   final SijdaStore store;
   final Future<void> Function()? playBeep;
 
   @override
+  State<TasbeehPage> createState() => _TasbeehPageState();
+}
+
+class _TasbeehPageState extends State<TasbeehPage> {
+  final SpeechToText _speech = SpeechToText();
+  bool _speechEnabled = false;
+  bool _isListening = false;
+  String _lastRecognizedWords = '';
+  DateTime? _lastHeardTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      _speechEnabled = await _speech.initialize(
+        onError: (val) {
+          debugPrint('Speech error: $val');
+          if (mounted && _isListening) {
+            _restartListening();
+          }
+        },
+        onStatus: (val) {
+          debugPrint('Speech status: $val');
+          if (val == 'done' && _isListening && mounted) {
+            _restartListening();
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Speech recognition initialization error: $e');
+    }
+  }
+
+  void _restartListening() {
+    if (!_isListening) return;
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted && _isListening) {
+        _startListening();
+      }
+    });
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _stopListening();
+    } else {
+      if (!_speechEnabled) {
+        await _initSpeech();
+      }
+      if (_speechEnabled) {
+        await _startListening();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Microphone access or speech service is unavailable.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _startListening() async {
+    try {
+      await _speech.listen(
+        onResult: _onSpeechResult,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+        ),
+      );
+      if (mounted) setState(() => _isListening = true);
+    } catch (e) {
+      debugPrint('Error starting speech recognition: $e');
+    }
+  }
+
+  Future<void> _stopListening() async {
+    try {
+      await _speech.stop();
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _isListening = false;
+        _lastRecognizedWords = '';
+      });
+    }
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    final words = result.recognizedWords.toLowerCase().trim();
+    if (words.isEmpty) return;
+
+    final now = DateTime.now();
+    // 600ms debounce between speech counts to prevent double counting
+    if (_lastHeardTime != null && now.difference(_lastHeardTime!).inMilliseconds < 650) {
+      return;
+    }
+
+    final store = widget.store;
+    final guided = store.mode == TasbeehMode.guided;
+
+    bool matched = false;
+
+    if (guided) {
+      final stage = store.stageIndex;
+      if (stage == 0) {
+        // Allahu Akbar / الله أكبر
+        if (words.contains('akbar') || words.contains('akber') || words.contains('allahu') || words.contains('الله') || words.contains('أكبر')) {
+          matched = true;
+        }
+      } else if (stage == 1) {
+        // Alhamdulillah / الحمد لله
+        if (words.contains('hamd') || words.contains('lillah') || words.contains('alhamd') || words.contains('الحمد') || words.contains('لله')) {
+          matched = true;
+        }
+      } else {
+        // SubhanAllah / سبحان الله
+        if (words.contains('subhan') || words.contains('sobhan') || words.contains('سبحان') || words.contains('الله')) {
+          matched = true;
+        }
+      }
+    } else {
+      // Free count: any detected speech phrase counts
+      matched = true;
+    }
+
+    if (matched) {
+      _lastHeardTime = now;
+      setState(() {
+        _lastRecognizedWords = result.recognizedWords;
+      });
+      _increment(context);
+    }
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final store = widget.store;
     final guided = store.mode == TasbeehMode.guided;
     final complete = guided && store.guidedComplete;
     final enabled = !store.saving && !complete;
+
     return ColoredBox(
       color: const Color(0xFFFBF9F5),
       child: LayoutBuilder(
@@ -34,11 +189,11 @@ class TasbeehPage extends StatelessWidget {
                 children: [
                   SegmentedButton<TasbeehMode>(
                     style: SegmentedButton.styleFrom(
-                      foregroundColor: _ink,
-                      selectedForegroundColor: tasbeehPlum,
-                      selectedBackgroundColor: Colors.white,
-                      backgroundColor: const Color(0xFFEBE6DC),
-                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      foregroundColor: const Color(0xFF5A6B63),
+                      selectedForegroundColor: Colors.white,
+                      selectedBackgroundColor: sajdaEmerald,
+                      backgroundColor: const Color(0xFFEDE8DE),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       side: BorderSide.none,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -50,12 +205,17 @@ class TasbeehPage extends StatelessWidget {
                         value: TasbeehMode.guided,
                         label: Text(
                           'Guided tasbeeh',
+                          style: TextStyle(fontWeight: FontWeight.w600),
                           textAlign: TextAlign.center,
                         ),
                       ),
                       ButtonSegment(
                         value: TasbeehMode.free,
-                        label: Text('Free count', textAlign: TextAlign.center),
+                        label: Text(
+                          'Free count',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ],
                     selected: {store.mode},
@@ -63,33 +223,91 @@ class TasbeehPage extends StatelessWidget {
                         ? null
                         : (value) => store.setMode(value.single),
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: store.saving ? null : () => _settings(context),
-                      icon: Icon(
-                        guided
-                            ? (store.guidedBeep
-                                  ? Icons.volume_up
-                                  : Icons.volume_off)
-                            : (store.freeBeepMode == FreeBeepMode.off
-                                  ? Icons.volume_off
-                                  : Icons.volume_up),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      // Voice Listening Mode Toggle Button
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _isListening
+                              ? Colors.red.withValues(alpha: 0.12)
+                              : const Color(0xFFEDE8DE),
+                          foregroundColor: _isListening ? Colors.red : sajdaEmerald,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        ),
+                        onPressed: enabled ? _toggleListening : null,
+                        icon: Icon(
+                          _isListening ? Icons.mic : Icons.mic_none,
+                          size: 18,
+                        ),
+                        label: Text(
+                          _isListening ? 'Listening...' : 'Voice mode',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
                       ),
-                      label: Text(
-                        guided
-                            ? 'Stage beeps: ${store.guidedBeep ? 'on' : 'off'}'
-                            : switch (store.freeBeepMode) {
-                                FreeBeepMode.off => 'Beep: off',
-                                FreeBeepMode.once =>
-                                  'Beep at ${store.freeBeepInterval}',
-                                FreeBeepMode.every =>
-                                  'Beep every ${store.freeBeepInterval}',
-                              },
+                      TextButton.icon(
+                        onPressed: store.saving ? null : () => _settings(context),
+                        icon: Icon(
+                          guided
+                              ? (store.guidedBeep
+                                    ? Icons.volume_up
+                                    : Icons.volume_off)
+                              : (store.freeBeepMode == FreeBeepMode.off
+                                    ? Icons.volume_off
+                                    : Icons.volume_up),
+                          size: 18,
+                        ),
+                        label: Text(
+                          guided
+                              ? 'Stage beeps: ${store.guidedBeep ? 'on' : 'off'}'
+                              : switch (store.freeBeepMode) {
+                                  FreeBeepMode.off => 'Beep: off',
+                                  FreeBeepMode.once =>
+                                    'Beep at ${store.freeBeepInterval}',
+                                  FreeBeepMode.every =>
+                                    'Beep every ${store.freeBeepInterval}',
+                                },
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_isListening)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: sajdaEmerald.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: sajdaEmerald.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: sajdaEmerald),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                guided
+                                    ? 'Listening for "${store.dhikr}"...'
+                                    : 'Listening for any dhikr...',
+                                style: const TextStyle(fontSize: 12, color: sajdaEmerald, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   Semantics(
                     button: true,
                     enabled: enabled,
@@ -105,7 +323,7 @@ class TasbeehPage extends StatelessWidget {
                       excludeFromSemantics: true,
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          minHeight: math.max(320, constraints.maxHeight - 230),
+                          minHeight: math.max(300, constraints.maxHeight - 250),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -118,12 +336,12 @@ class TasbeehPage extends StatelessWidget {
                                   shape: BoxShape.circle,
                                   color: Colors.white,
                                   border: Border.all(
-                                    color: const Color(0xFFC5A059),
+                                    color: sajdaGold,
                                     width: 3.5,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF0F4C3A).withValues(alpha: 0.08),
+                                      color: sajdaEmerald.withValues(alpha: 0.08),
                                       blurRadius: 20,
                                       offset: const Offset(0, 6),
                                     ),
@@ -154,7 +372,8 @@ class TasbeehPage extends StatelessWidget {
                                               textDirection: TextDirection.rtl,
                                               style: const TextStyle(
                                                 fontSize: 36,
-                                                color: tasbeehPlum,
+                                                fontWeight: FontWeight.w600,
+                                                color: sajdaEmerald,
                                               ),
                                             ),
                                           ),
@@ -168,11 +387,14 @@ class TasbeehPage extends StatelessWidget {
                             Text(
                               complete
                                   ? 'Sequence complete'
-                                  : 'Tap the screen to increase counter',
+                                  : _isListening
+                                      ? 'Speak aloud or tap to count'
+                                      : 'Tap the screen to increase counter',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Color(0xFF9A522A),
+                              style: TextStyle(
+                                color: _isListening ? sajdaEmerald : const Color(0xFF9A522A),
                                 fontStyle: FontStyle.italic,
+                                fontWeight: _isListening ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 16,
                               ),
                             ),
@@ -196,7 +418,8 @@ class TasbeehPage extends StatelessWidget {
                       Expanded(
                         child: FilledButton.icon(
                           style: FilledButton.styleFrom(
-                            backgroundColor: tasbeehPlum,
+                            backgroundColor: sajdaEmerald,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 18),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -213,8 +436,8 @@ class TasbeehPage extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: tasbeehPlum,
-                            side: const BorderSide(color: tasbeehPlum),
+                            foregroundColor: sajdaEmerald,
+                            side: const BorderSide(color: sajdaEmerald, width: 1.5),
                             padding: const EdgeInsets.symmetric(vertical: 18),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -245,14 +468,12 @@ class TasbeehPage extends StatelessWidget {
   }
 
   Future<void> _increment(BuildContext context) async {
-    // Gentle haptic feedback on bead tap
     HapticFeedback.lightImpact();
-    final beep = await store.incrementTasbeeh();
+    final beep = await widget.store.incrementTasbeeh();
     if (!beep) return;
-    // Stage completion or target reached haptic
     HapticFeedback.mediumImpact();
     try {
-      await (playBeep ?? BeepSound.play)();
+      await (widget.playBeep ?? BeepSound.play)();
     } on Exception catch (exception) {
       debugPrint('Sijda beep playback failed: $exception');
       if (context.mounted) {
@@ -271,10 +492,10 @@ class TasbeehPage extends StatelessWidget {
     final settings =
         await showDialog<({bool guided, FreeBeepMode mode, int interval})>(
           context: context,
-          builder: (context) => _BeepSettings(store: store),
+          builder: (context) => _BeepSettings(store: widget.store),
         );
-    if (settings != null && !store.saving) {
-      await store.setBeepSettings(
+    if (settings != null && context.mounted) {
+      await widget.store.setBeepSettings(
         guided: settings.guided,
         freeMode: settings.mode,
         interval: settings.interval,
@@ -283,24 +504,35 @@ class TasbeehPage extends StatelessWidget {
   }
 
   Future<void> _reset(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset this tasbeeh count?'),
-        content: const Text('Only the current mode will be reset.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final confirm =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Reset counter?'),
+            content: Text(
+              widget.store.mode == TasbeehMode.guided
+                  ? 'This resets the guided tasbeeh back to the start.'
+                  : 'This resets the free count back to zero.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: sajdaEmerald,
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Confirm'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && !store.saving) await store.resetTasbeeh();
+        ) ??
+        false;
+    if (confirm && context.mounted) {
+      await widget.store.resetTasbeeh();
+    }
   }
 }
 
@@ -313,12 +545,12 @@ class _BeepSettings extends StatefulWidget {
 }
 
 class _BeepSettingsState extends State<_BeepSettings> {
+  final _form = GlobalKey<FormState>();
   late bool _guided = widget.store.guidedBeep;
   late FreeBeepMode _mode = widget.store.freeBeepMode;
   late final _interval = TextEditingController(
-    text: '${widget.store.freeBeepInterval}',
+    text: widget.store.freeBeepInterval.toString(),
   );
-  final _form = GlobalKey<FormState>();
 
   @override
   void dispose() {
@@ -329,16 +561,19 @@ class _BeepSettingsState extends State<_BeepSettings> {
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('Beep settings'),
-    content: SingleChildScrollView(
-      child: Form(
-        key: _form,
+    content: Form(
+      key: _form,
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Guided stage beeps'),
-              subtitle: const Text('After 34, then 33, then 33 counts'),
+              title: const Text('Guided-stage beeps'),
+              subtitle: const Text(
+                'Beep after 34 Allahu Akbar, 33 Alhamdulillah and 33 SubhanAllah.',
+              ),
               value: _guided,
               onChanged: (value) => setState(() => _guided = value),
             ),
@@ -391,6 +626,9 @@ class _BeepSettingsState extends State<_BeepSettings> {
         child: const Text('Cancel'),
       ),
       FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: sajdaEmerald,
+        ),
         onPressed: () {
           if (_form.currentState!.validate()) {
             Navigator.pop(context, (
