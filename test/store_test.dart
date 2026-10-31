@@ -301,4 +301,29 @@ void main() {
     storage.value = jsonEncode(data);
     await expectLater(SijdaStore.load(storage: storage), throwsFormatException);
   });
+
+  test('JSON backup export and import restore state accurately', () async {
+    final storage = MemoryStorage();
+    final store = SijdaStore(storage);
+    await store.setBalance('Fajr', 15);
+    await store.setBalance('Fasts', 5);
+    await store.incrementTasbeeh();
+    await store.incrementTasbeeh();
+
+    final jsonStr = store.exportJson();
+    expect(jsonStr, contains('"app": "Sajdah"'));
+    expect(jsonStr, contains('"Fajr": 15'));
+
+    // Create fresh store and import
+    final freshStorage = MemoryStorage();
+    final freshStore = SijdaStore(freshStorage);
+    expect(freshStore.balances['Fajr'], 0);
+    expect(freshStore.activeCount, 0);
+
+    final success = await freshStore.importJson(jsonStr);
+    expect(success, isTrue);
+    expect(freshStore.balances['Fajr'], 15);
+    expect(freshStore.balances['Fasts'], 5);
+    expect(freshStore.guidedCount, 2);
+  });
 }

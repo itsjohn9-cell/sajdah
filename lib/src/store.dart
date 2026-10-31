@@ -109,6 +109,74 @@ class SijdaStore extends ChangeNotifier {
     return store;
   }
 
+  String exportJson() {
+    return const JsonEncoder.withIndent('  ').convert({
+      'app': 'Sajdah',
+      'version': 3,
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'tasbeeh': tasbeeh,
+      'guidedCount': guidedCount,
+      'mode': mode.name,
+      'guidedBeep': guidedBeep,
+      'freeBeepMode': freeBeepMode.name,
+      'freeBeepInterval': freeBeepInterval,
+      'balances': _balances,
+    });
+  }
+
+  Future<bool> importJson(String raw) async {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Invalid backup format: expected JSON object.');
+    }
+    int number(Object? value, String name) {
+      if (value is! int || value < 0 || value > 1000000) {
+        throw FormatException('Invalid $name in backup.');
+      }
+      return value;
+    }
+
+    final newTasbeeh = number(decoded['tasbeeh'], 'tasbeeh count');
+    final newGuided = number(decoded['guidedCount'], 'guided count');
+    if (newGuided > 100) {
+      throw const FormatException('Guided count cannot exceed 100.');
+    }
+    final rawMode = decoded['mode'] as String?;
+    if (rawMode == null || !TasbeehMode.values.any((m) => m.name == rawMode)) {
+      throw const FormatException('Invalid tasbeeh mode in backup.');
+    }
+    final newMode = TasbeehMode.values.byName(rawMode);
+
+    final newGuidedBeep = decoded['guidedBeep'] is bool ? decoded['guidedBeep'] as bool : true;
+    final rawFreeBeepMode = decoded['freeBeepMode'] as String?;
+    final newFreeBeepMode = rawFreeBeepMode != null && FreeBeepMode.values.any((m) => m.name == rawFreeBeepMode)
+        ? FreeBeepMode.values.byName(rawFreeBeepMode)
+        : FreeBeepMode.off;
+    final newInterval = decoded['freeBeepInterval'] != null
+        ? number(decoded['freeBeepInterval'], 'beep interval')
+        : 100;
+    if (newInterval < 1) throw const FormatException('Beep interval must be positive.');
+
+    final balances = decoded['balances'];
+    if (balances is! Map<String, dynamic>) {
+      throw const FormatException('Invalid balances map in backup.');
+    }
+    final newBalances = <String, int>{};
+    for (final key in _balances.keys) {
+      newBalances[key] = number(balances[key], 'balance for $key');
+    }
+
+    return _save(
+      count: newTasbeeh,
+      newGuidedCount: newGuided,
+      newMode: newMode,
+      newGuidedBeep: newGuidedBeep,
+      newFreeBeepMode: newFreeBeepMode,
+      newInterval: newInterval,
+      balances: newBalances,
+    );
+  }
+
   int get prayersRemaining =>
       prayerNames.fold(0, (total, name) => total + _balances[name]!);
 

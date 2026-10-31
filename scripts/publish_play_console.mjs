@@ -122,7 +122,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'v0.1.11: Multi-video verified pose tracking (100% precision across male/female prayer in loose attire), graceful upper-body fallback during bowing (Ruku), debounced ceiling reflection/ghost rejection on Galaxy S24, and seamless prostration-to-sitting transition tracking.'
+        text: 'v0.1.12: Added haptic feedback pulses on Tasbeeh beads and prayer movements, offline JSON data backup and restore, Qaza completion projections, prayer doubts (Shakeyat al-Salat) reference guide, and UI responsiveness improvements.'
       }
     ];
 

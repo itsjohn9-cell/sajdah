@@ -31,10 +31,26 @@ export function stopForFeedback() {
   if (stream || starting) stop("Camera stopped for feedback. Estimates retained.");
 }
 
-const $ = id => document.getElementById(id);
-const video = $("video");
+let previousSajdahCount = 0;
+let previousRakatCount = 0;
+
+function triggerHaptic(type = "light") {
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      if (type === "sajdah") {
+        navigator.vibrate([70, 50, 70]); // Double crisp pulse for Sajdah
+      } else if (type === "rakat") {
+        navigator.vibrate([150, 80, 200]); // Long celebration pulse for Rakat completion
+      } else {
+        navigator.vibrate(50); // Light tap
+      }
+    }
+  } catch (_) {}
+}
 let counter = new RakatCounter(2, { adaptive: true });
 let stream = null;
+const $ = id => (typeof document !== "undefined" && typeof document.getElementById === "function") ? document.getElementById(id) : null;
+const video = $("video");
 let detector = null;
 let starting = false;
 let generation = 0;
@@ -462,6 +478,18 @@ function loop(time) {
         const posture = classifyPose(points, calibration, context);
         counter.observe(posture, time);
         recordTransition(time, posture);
+
+        // Haptic feedback checks on Sajdah and Rakat boundaries
+        const currentSajdahs = counter.rakats.length * 2 + counter.sajdahs;
+        const currentRakats = counter.rakats.length;
+        if (currentRakats > previousRakatCount) {
+          triggerHaptic("rakat");
+          previousRakatCount = currentRakats;
+          previousSajdahCount = currentSajdahs;
+        } else if (currentSajdahs > previousSajdahCount) {
+          triggerHaptic("sajdah");
+          previousSajdahCount = currentSajdahs;
+        }
         let guidance = "";
         const isProstrating = posture === "sajdah" || counter.phase === "firstSajdah" ||
           counter.phase === "between" || counter.phase === "secondSajdah" || isCovered;

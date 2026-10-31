@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'store.dart';
 import 'beep_sound.dart';
@@ -244,8 +245,12 @@ class TasbeehPage extends StatelessWidget {
   }
 
   Future<void> _increment(BuildContext context) async {
+    // Gentle haptic feedback on bead tap
+    HapticFeedback.lightImpact();
     final beep = await store.incrementTasbeeh();
     if (!beep) return;
+    // Stage completion or target reached haptic
+    HapticFeedback.mediumImpact();
     try {
       await (playBeep ?? BeepSound.play)();
     } on Exception catch (exception) {

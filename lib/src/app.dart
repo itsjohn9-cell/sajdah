@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'store.dart';
@@ -80,7 +81,7 @@ class _SijdaHomeState extends State<SijdaHome> {
                 onPressed: () => showAboutDialog(
                   context: context,
                   applicationName: 'Sajdah',
-                  applicationVersion: '0.1.10',
+                  applicationVersion: '0.1.12',
                   children: [
                     const Text(
                       'A quiet companion for your daily worship.\n\n'
@@ -102,6 +103,11 @@ class _SijdaHomeState extends State<SijdaHome> {
                     TextButton(
                       onPressed: _openPrivacyPolicy,
                       child: const Text('Read full privacy policy'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _showBackupRestoreDialog(context, store),
+                      icon: const Icon(Icons.backup_outlined),
+                      label: const Text('Backup & restore data (JSON)'),
                     ),
                     const SelectableText(
                       'Privacy and deletion: fehmatics@gmail.com',
@@ -382,6 +388,41 @@ class _SijdaHomeState extends State<SijdaHome> {
         ),
       const SizedBox(height: 24),
       Text(
+        'Jurisprudence & Prayer Doubts',
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF0F4C3A),
+            ),
+      ),
+      const SizedBox(height: 6),
+      const Text('Quick reference for doubts in prayer (Shakeyat al-Salat) according to Ayatullah al-Sistani (Tawdih al-Masa\'il).'),
+      const SizedBox(height: 10),
+      Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE2DDD3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Common Valid Doubts in 4-Rakat Prayers',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4C3A)),
+              ),
+              const SizedBox(height: 8),
+              _doubtRow('Doubt between Rakat 2 & 3 (after 2nd sajdah):', 'Assume 3, finish 4th rakat, then perform 1 rakat of Salat al-Ihtiyat standing.'),
+              _doubtRow('Doubt between Rakat 3 & 4 (any time):', 'Assume 4, finish prayer, then perform 1 rakat standing or 2 rakats sitting of Salat al-Ihtiyat.'),
+              _doubtRow('Doubt between Rakat 2 & 4 (after 2nd sajdah):', 'Assume 4, finish prayer, then perform 2 rakats standing of Salat al-Ihtiyat.'),
+              _doubtRow('Forgetfulness of 1 Sajdah (noticed after ruku):', 'Continue prayer, complete it, perform qada of the missed sajdah, then perform 2 Sajdatay al-Sahw.'),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+      Text(
         'Coming next',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
@@ -406,6 +447,19 @@ class _SijdaHomeState extends State<SijdaHome> {
         ),
       ),
     ],
+  );
+
+  Widget _doubtRow(String doubt, String solution) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF2C3E35)),
+        children: [
+          TextSpan(text: '$doubt ', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F4C3A))),
+          TextSpan(text: solution),
+        ],
+      ),
+    ),
   );
 
   Widget _stepPill(String title, bool active) => Container(
@@ -619,7 +673,13 @@ class _SijdaHomeState extends State<SijdaHome> {
       FilledButton.icon(
         onPressed: _rakat >= _rakatTarget
             ? null
-            : () => setState(() => _rakat++),
+            : () {
+                HapticFeedback.lightImpact();
+                setState(() => _rakat++);
+                if (_rakat >= _rakatTarget) {
+                  HapticFeedback.mediumImpact();
+                }
+              },
         icon: const Icon(Icons.add),
         label: const Padding(
           padding: EdgeInsets.all(16),
@@ -732,6 +792,44 @@ class _SijdaHomeState extends State<SijdaHome> {
           ),
         ),
       const SizedBox(height: 16),
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F4C3A).withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFF0F4C3A).withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: const [
+                Icon(Icons.insights, color: Color(0xFF0F4C3A), size: 20),
+                Text(
+                  'Completion Projection',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F4C3A),
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              store.prayersRemaining == 0
+                  ? 'All obligatory daily prayers are up to date! Al-hamdulillah.'
+                  : 'Total missed prayers: ${store.prayersRemaining}.\n'
+                    '• At 1 prayer/day: ~${(store.prayersRemaining / 1).ceil()} days (~${(store.prayersRemaining / 365).toStringAsFixed(1)} years)\n'
+                    '• At 5 prayers/day (1 full day set): ~${(store.prayersRemaining / 5).ceil()} days',
+              style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF2C3E35)),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
       const Text(
         'Made a mistake? Use Set balance to correct it. Prayer and fast '
         'balances are separate. No women-specific or madhab settings '
@@ -767,6 +865,106 @@ class _SijdaHomeState extends State<SijdaHome> {
     if (value != null && mounted && !store.saving) {
       await store.setBalance(name, value);
     }
+  }
+
+  Future<void> _showBackupRestoreDialog(BuildContext context, SijdaStore store) async {
+    final jsonExport = store.exportJson();
+    final importController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Backup & Restore'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Your counts are stored privately on this device. You can copy this JSON backup or paste a previous backup to restore.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                const Text('Current Backup (Copy to save):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0ECE4),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    jsonExport,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: jsonExport));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Backup JSON copied to clipboard!')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('Copy backup to clipboard'),
+                ),
+                const Divider(height: 32),
+                const Text('Restore from Backup (Paste JSON):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: importController,
+                  maxLines: 4,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Paste valid Sajdah JSON backup here...',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: () async {
+                    final text = importController.text.trim();
+                    if (text.isEmpty) return;
+                    try {
+                      final success = await store.importJson(text);
+                      if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              success
+                                  ? 'Backup successfully restored!'
+                                  : 'Could not restore backup.',
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Restore failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.restore, size: 16),
+                  label: const Text('Restore from JSON'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    importController.dispose();
   }
 }
 
