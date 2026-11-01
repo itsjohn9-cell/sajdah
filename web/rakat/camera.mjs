@@ -68,6 +68,7 @@ let interruptions = 0;
 let firstObservation = null;
 let calibMultipleFrames = 0;
 let multipleFrames = 0;
+let multipleClearFrames = 0;  // counts consecutive non-multiple frames while paused by multi-person
 const transitions = [];
 const lightButton = $("screen-light");
 const lightStatus = $("screen-light-status");
@@ -446,10 +447,29 @@ function loop(time) {
             render();
           }
         }
+      } else if (counter.paused && !counter.complete &&
+                 counter.reason === "Multiple people detected. Only one person should be in camera view." &&
+                 calibration) {
+        // Auto-resume: the multi-person pause was caused by a transient floor reflection or shadow.
+        // Once the scene has been clear for 20 consecutive frames (~2 s at 10 fps) we silently
+        // restart the current partial rakat so the worshipper does not need to manually tap Resume.
+        if (!isMultiple) {
+          multipleClearFrames++;
+          if (multipleClearFrames >= 20) {
+            multipleClearFrames = 0;
+            multipleFrames = 0;
+            counter.restartCurrent();
+            status("Tracking resumed automatically. Stand upright to continue.");
+            render();
+          }
+        } else {
+          multipleClearFrames = 0;
+        }
       } else if (!counter.paused && !counter.complete) {
         if (isMultiple) {
           const threshold = (counter.phase === "firstSajdah" || counter.phase === "between" || counter.phase === "secondSajdah" || counter.phase === "exit") ? 15 : 8;
           multipleFrames++;
+          multipleClearFrames = 0;
           if (multipleFrames >= threshold) {
             counter.pause("Multiple people detected. Only one person should be in camera view.");
             status(counter.reason);

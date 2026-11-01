@@ -69,7 +69,7 @@ class _SijdaHomeState extends State<SijdaHome> {
                 onPressed: () => showAboutDialog(
                   context: context,
                   applicationName: 'Sajdah',
-                  applicationVersion: '0.1.13',
+                  applicationVersion: '0.1.14',
                   children: [
                     const Text(
                       'A quiet companion for your daily worship.\n\n'

@@ -128,7 +128,11 @@ export class RakatCounter {
           }
           break;
         case "exit":
-          if (posture === "sitting" || posture === "standing" || posture !== "sajdah") {
+          // Accept sitting or standing as a clean exit from the second sajdah.
+          // Do NOT accept bow — it appears as noise when the worshipper is still
+          // pushing up from the floor and is ambiguous. Unknown is also excluded
+          // so that a brief tracking blip cannot prematurely close the rakat.
+          if (posture === "sitting" || posture === "standing") {
             this.rakats.push({ sajdahs: 2 });
             this.sajdahs = 0;
             this.leftFirstSajdah = false;
@@ -604,18 +608,43 @@ export function selectPrimaryPose(poses) {
     for (let i = 0; i <= 24 && i < pose.length; i++) {
       score += (pose[i]?.visibility ?? 0);
     }
-    return { pose, score };
+    // Compute the vertical centroid of the pose (average Y across confident keypoints).
+    // Reflections and floor artefacts are always anchored to the bottom of the frame (high Y).
+    // The real worshipper's centroid is always near the top or centre of the frame (low Y).
+    let centroidY = 0;
+    let centroidCount = 0;
+    for (let i = 0; i <= 24 && i < pose.length; i++) {
+      const p = pose[i];
+      if (p && Number.isFinite(p.y) && (p.visibility ?? 1) > 0.35) {
+        centroidY += p.y;
+        centroidCount++;
+      }
+    }
+    centroidY = centroidCount > 0 ? centroidY / centroidCount : 0.5;
+    return { pose, score, centroidY };
   }).sort((a, b) => b.score - a.score);
 
   const top = scored[0];
   const second = scored[1];
 
-  // Genuinely multiple people requires two substantial, full-body poses of comparable visibility.
-  // Reflections on marble/tiles, ceiling lights, shadows, or background graphics are ignored in favor of the primary worshipper.
+  // A second detection is a reflection / floor artefact (not a real person) when:
+  //   • its centroid sits more than 0.20 frame-units below the primary pose
+  //     (i.e. it is anchored to the floor, which is typical of mirror/tile reflections
+  //     seen from a phone lying flat on the mat in floor-tilted placement), OR
+  //   • its visibility score is substantially weaker than the primary pose
+  //     (gap >= 5 over a 25-landmark sum means the second body is a ghost, not a person).
+  const secondIsArtefact = (
+    second.centroidY - top.centroidY > 0.20 ||   // second pose anchored to floor
+    second.score < top.score - 5                  // second pose is a weak ghost
+  );
+
+  // Genuinely multiple people requires two substantial, comparable full-body poses
+  // that are spatially distinct from each other (not one real body + its floor reflection).
   const isGenuineMultiple = (
-    top.score >= 20 &&
-    second.score >= 20 &&
-    Math.abs(top.score - second.score) < 1.5
+    top.score >= 15 &&
+    second.score >= 15 &&
+    Math.abs(top.score - second.score) < 5 &&    // was 1.5 — far too tight for real-world cameras
+    !secondIsArtefact
   );
 
   if (!isGenuineMultiple) {

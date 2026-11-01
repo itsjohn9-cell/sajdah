@@ -569,3 +569,121 @@ test("Scenario 17: Shia Qunoot in Rakat 2 (raising hands before face during stan
   assert.equal(counter.complete, true);
 });
 
+
+// ─── Regression tests for v0.1.14 feedback fixes ─────────────────────────────
+
+test("Regression: high-confidence floor reflection on S24 Ultra (floor-tilted placement) is not flagged as multiple people", () => {
+  // Replay: Galaxy S24 Ultra placed flat on prostration mat (floor-tilted).
+  // The high-res front camera captures a specular reflection on the glossy floor
+  // that MediaPipe assigns high landmark confidence to — scores both above 20,
+  // gap is within the old 1.5 threshold, triggering the false multiple-person pause.
+  const worshipper = upperBodyLandmarks({ headY: 0.20, shoulderY: 0.38 });
+  // Give all visible worshipper landmarks high confidence
+  for (let i = 0; i <= 24; i++) {
+    if (worshipper[i]) worshipper[i].visibility = 0.92;
+  }
+
+  // Floor reflection: anchored to the bottom of the frame, centroid Y ~0.88
+  const floorReflection = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.88, z: 0, visibility: 0.80 }));
+  floorReflection[0]  = { x: 0.50, y: 0.86, z: 0, visibility: 0.82 };
+  floorReflection[11] = { x: 0.44, y: 0.89, z: 0, visibility: 0.79 };
+  floorReflection[12] = { x: 0.56, y: 0.89, z: 0, visibility: 0.78 };
+  floorReflection[23] = { x: 0.46, y: 0.92, z: 0, visibility: 0.74 };
+  floorReflection[24] = { x: 0.54, y: 0.92, z: 0, visibility: 0.73 };
+
+  const { pose, isMultiple } = selectPrimaryPose([worshipper, floorReflection]);
+  assert.equal(isMultiple, false,
+    "High-confidence floor reflection from S24 Ultra floor-tilted placement must NOT trigger multiple-person pause");
+  assert.ok(pose, "Worshipper pose must be returned as primary");
+
+  // Primary pose must be the worshipper (centroid Y near top), not the reflection (centroid Y near bottom)
+  const headY = pose[0]?.y ?? 1;
+  assert.ok(headY < 0.5,
+    "Selected primary pose must be the real worshipper (head near top of frame), not the floor reflection");
+});
+
+test("Regression: two high-confidence equally-scored poses at similar Y are still flagged as genuine multiple people", () => {
+  // Verify the fix doesn't accidentally suppress a real two-person scenario.
+  function fullBodyLandmarks(xOffset) {
+    const p = Array.from({ length: 33 }, () => ({ x: 0.5 + xOffset, y: 0.5, z: 0, visibility: 0.88 }));
+    p[0]  = { x: 0.5 + xOffset, y: 0.15, z: 0, visibility: 0.90 };
+    p[11] = { x: 0.4 + xOffset, y: 0.35, z: 0, visibility: 0.88 };
+    p[12] = { x: 0.6 + xOffset, y: 0.35, z: 0, visibility: 0.88 };
+    p[23] = { x: 0.45 + xOffset, y: 0.55, z: 0, visibility: 0.85 };
+    p[24] = { x: 0.55 + xOffset, y: 0.55, z: 0, visibility: 0.85 };
+    p[25] = { x: 0.44 + xOffset, y: 0.72, z: 0, visibility: 0.80 };
+    p[26] = { x: 0.56 + xOffset, y: 0.72, z: 0, visibility: 0.80 };
+    p[27] = { x: 0.43 + xOffset, y: 0.88, z: 0, visibility: 0.75 };
+    p[28] = { x: 0.57 + xOffset, y: 0.88, z: 0, visibility: 0.75 };
+    return p;
+  }
+  const person1 = fullBodyLandmarks(-0.25);
+  const person2 = fullBodyLandmarks(+0.25);
+
+  const { pose, isMultiple } = selectPrimaryPose([person1, person2]);
+  assert.equal(isMultiple, true,
+    "Two side-by-side full-body poses with similar scores AND similar Y centroids must still be flagged as genuine multiple people");
+  assert.equal(pose, null, "No single pose must be returned when genuinely multiple people are detected");
+});
+
+test("Regression: exit phase does not complete rakat on bow or unknown — only sitting or standing", () => {
+  // Replay: session where 2 sajdahs were counted correctly but rakat stayed 0
+  // because bow/unknown noise during push-up incorrectly triggered the exit.
+  const counter = new RakatCounter(2, { adaptive: true });
+
+  // Establish standing
+  counter.observe("standing", 1000);
+  counter.observe("standing", 1700);
+  assert.equal(counter.phase, "bow");
+
+  // Direct sajdah path (floor-tilted — no separate bow phase seen)
+  counter.observe("sajdah", 2400);
+  counter.observe("sajdah", 3100);
+  assert.equal(counter.sajdahs, 1);
+  assert.equal(counter.phase, "between");
+
+  // Jalsah separator (sitting or standing viewed from mat)
+  counter.observe("sitting", 3800);
+  counter.observe("sitting", 4500);
+  assert.equal(counter.phase, "secondSajdah");
+
+  counter.observe("sajdah", 5200);
+  counter.observe("sajdah", 5900);
+  assert.equal(counter.sajdahs, 2);
+  assert.equal(counter.phase, "exit");
+
+  // Bow noise during push-up must NOT complete the rakat
+  counter.observe("bow", 6600);
+  assert.equal(counter.rakats.length, 0, "bow during exit must not prematurely complete a rakat");
+  assert.equal(counter.phase, "exit", "phase must stay in exit after spurious bow");
+
+  // Unknown noise must NOT complete the rakat
+  // (observe ignores unknown by returning early in the dwell guard)
+  counter.observe("unknown", 7300);
+  assert.equal(counter.rakats.length, 0, "unknown during exit must not complete a rakat");
+
+  // Clean standing completes the rakat
+  counter.observe("standing", 8100);
+  counter.observe("standing", 8800);
+  assert.equal(counter.rakats.length, 1, "Rakat must complete once clean standing is observed in exit phase");
+  assert.equal(counter.sajdahs, 0);
+});
+
+test("Regression: clean sitting in exit phase completes rakat for final Tashahhud", () => {
+  const counter = new RakatCounter(2, { adaptive: true });
+
+  counter.observe("standing", 1000);
+  counter.observe("standing", 1700);
+  counter.observe("sajdah", 2400);
+  counter.observe("sajdah", 3100);
+  counter.observe("standing", 3800);
+  counter.observe("sajdah", 4500);
+  counter.observe("sajdah", 5200);
+  assert.equal(counter.phase, "exit");
+
+  // Sitting (Tashahhud) should complete the rakat
+  counter.observe("sitting", 6000);
+  counter.observe("sitting", 6700);
+  assert.equal(counter.rakats.length, 1, "Sitting in exit phase must complete the rakat");
+  assert.equal(counter.complete, false, "One rakat done, second still needed");
+});
