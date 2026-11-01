@@ -330,7 +330,20 @@ export function adaptiveCalibration(points, options = {}) {
 
   // 2. Check if phone is flat on ground (mat mode)
   if (options.orientation === "flat" || options.mode === "mat") {
-    return { mode: "mat", orientation: "flat" };
+    const up = upperFeatures(points, 0.4);
+    if (up && up.head && up.shoulder) {
+      const torsoUpright = up.head.y < up.shoulder.y - 0.04;
+      if (torsoUpright && up.head.y < 0.40) {
+        return {
+          mode: "mat",
+          orientation: options.orientation || "flat",
+          headY: up.head.y,
+          shoulderY: up.shoulder.y,
+          torsoSpan: Math.max(up.shoulder.y - up.head.y, 0.08),
+        };
+      }
+    }
+    return null;
   }
 
   // 3. Try side profile
@@ -644,52 +657,51 @@ export function selectPrimaryPose(poses) {
 
   const scored = valid.map(pose => {
     let score = 0;
-    for (let i = 0; i <= 24 && i < pose.length; i++) {
-      score += (pose[i]?.visibility ?? 0);
-    }
-    // Compute the vertical centroid of the pose (average Y across confident keypoints).
-    // Reflections and floor artefacts are always anchored to the bottom of the frame (high Y).
-    // The real worshipper's centroid is always near the top or centre of the frame (low Y).
+    let centroidX = 0;
     let centroidY = 0;
     let centroidCount = 0;
     for (let i = 0; i <= 24 && i < pose.length; i++) {
       const p = pose[i];
-      if (p && Number.isFinite(p.y) && (p.visibility ?? 1) > 0.35) {
+      const vis = p?.visibility ?? 0;
+      score += vis;
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && vis > 0.30) {
+        centroidX += p.x;
         centroidY += p.y;
         centroidCount++;
       }
     }
+    centroidX = centroidCount > 0 ? centroidX / centroidCount : 0.5;
     centroidY = centroidCount > 0 ? centroidY / centroidCount : 0.5;
-    return { pose, score, centroidY };
+    const noseY = (pose[0] && Number.isFinite(pose[0].y)) ? pose[0].y : centroidY;
+    const noseX = (pose[0] && Number.isFinite(pose[0].x)) ? pose[0].x : centroidX;
+    return { pose, score, centroidX, centroidY, noseX, noseY };
   }).sort((a, b) => b.score - a.score);
 
   const top = scored[0];
   const second = scored[1];
 
-  // A second detection is a reflection / floor artefact (not a real person) when:
-  //   • its centroid sits more than 0.20 frame-units below the primary pose
-  //     (i.e. it is anchored to the floor, which is typical of mirror/tile reflections
-  //     seen from a phone lying flat on the mat in floor-tilted placement), OR
-  //   • its visibility score is substantially weaker than the primary pose
-  //     (gap >= 5 over a 25-landmark sum means the second body is a ghost, not a person).
-  const secondIsArtefact = (
-    second.centroidY - top.centroidY > 0.20 ||   // second pose anchored to floor
-    second.score < top.score - 5                  // second pose is a weak ghost
+  // A secondary pose is a floor reflection / tile specular artefact ONLY if:
+  // 1. It is directly underneath the primary worshipper (same horizontal column: dx < 0.15)
+  // 2. Its keypoints are down on the floor tiles (centroidY > 0.70)
+  // 3. Its head is at the bottom of the frame (noseY > 0.65) — a reflection does not have an upright head!
+  // 4. The primary worshipper is positioned above it (centroidY < 0.60)
+  const isFloorReflection = (
+    Math.abs(second.centroidX - top.centroidX) < 0.15 &&
+    second.centroidY > 0.70 &&
+    second.noseY > 0.65 &&
+    top.centroidY < 0.60
   );
 
-  // Genuinely multiple people requires two substantial, comparable full-body poses
-  // that are spatially distinct from each other (not one real body + its floor reflection).
-  const isGenuineMultiple = (
-    top.score >= 15 &&
-    second.score >= 15 &&
-    Math.abs(top.score - second.score) < 5 &&    // was 1.5 — far too tight for real-world cameras
-    !secondIsArtefact
-  );
-
-  if (!isGenuineMultiple) {
+  // If the second pose is merely a floor reflection, ignore it and track the worshipper:
+  if (isFloorReflection) {
     return { pose: top.pose, isMultiple: false };
   }
 
-  // Genuinely multiple people in frame
+  // If the second pose is a weak ghost detection (score < 5) while top is strong (score > 12):
+  if (second.score < 5 && top.score > 12) {
+    return { pose: top.pose, isMultiple: false };
+  }
+
+  // Otherwise, there are multiple genuine people in the camera view!
   return { pose: null, isMultiple: true };
 }

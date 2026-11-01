@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   RakatCounter,
   classifyPose,
+  standingCalibration,
   adaptiveCalibration,
   detectOrientation,
   diagnosePlacement,
@@ -767,4 +768,38 @@ test("Regression: commitExitRakat commits rakat when user stops session in exit 
 
   assert.equal(counter.rakats.length, 2, "Rakat 2 must be committed");
   assert.equal(counter.complete, true, "Prayer must be marked complete");
+});
+
+test("Regression: two people in room with unequal scores are correctly detected as multiple people", () => {
+  // Person 1 (praying): front and center, high visibility score (~20)
+  const person1 = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.40 });
+  for (let i = 0; i <= 24; i++) {
+    if (person1[i]) person1[i].visibility = 0.90;
+  }
+
+  // Person 2 (second person in room): standing to the left/behind, lower visibility score (~12)
+  const person2 = Array.from({ length: 33 }, () => ({ x: 0.2, y: 0.35, z: 0, visibility: 0.50 }));
+  person2[0] = { x: 0.2, y: 0.18, z: 0, visibility: 0.70 };
+  person2[11] = { x: 0.15, y: 0.32, z: 0, visibility: 0.65 };
+  person2[12] = { x: 0.25, y: 0.32, z: 0, visibility: 0.65 };
+  person2[23] = { x: 0.18, y: 0.55, z: 0, visibility: 0.60 };
+  person2[24] = { x: 0.22, y: 0.55, z: 0, visibility: 0.60 };
+
+  const { pose, isMultiple } = selectPrimaryPose([person1, person2]);
+  assert.equal(isMultiple, true, "Must flag multiple people when two real people are in frame, even if scores differ");
+  assert.equal(pose, null);
+});
+
+test("Regression: setup calibration rejects sitting pose on mat mode and only passes when standing upright", () => {
+  // Sitting pose on mat (head is low in frame: headY = 0.55)
+  const sitting = upperBodyLandmarks({ headY: 0.55, shoulderY: 0.72 });
+  const sittingCal = standingCalibration(sitting, { allowAdaptive: true, orientation: "flat" });
+  assert.equal(sittingCal, null, "Setup calibration must NOT pass while the user is sitting on the floor");
+
+  // Standing upright in Qiyam (head is high in frame: headY = 0.22)
+  const standing = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.40 });
+  const standingCal = standingCalibration(standing, { allowAdaptive: true, orientation: "flat" });
+  assert.ok(standingCal, "Setup calibration must succeed when user stands upright");
+  assert.equal(standingCal.mode, "mat");
+  assert.equal(standingCal.headY, 0.22);
 });

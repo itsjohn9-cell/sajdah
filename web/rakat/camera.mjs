@@ -437,9 +437,8 @@ function loop(time) {
         const sample = standingCalibration(points, { allowAdaptive: true, orientation, pitch: devicePitch });
         const stable = sample && (!baseline ||
           (sample.mode === baseline.mode &&
-           (sample.mode === "mat" ||
-            (Number.isFinite(sample.hipY) && Math.abs(sample.hipY - (baseline.hipY ?? sample.hipY)) < 0.05) ||
-            (Number.isFinite(sample.headY) && Math.abs(sample.headY - (baseline.headY ?? sample.headY)) < 0.05))));
+           ((Number.isFinite(sample.hipY) && Math.abs(sample.hipY - (baseline.hipY ?? sample.hipY)) < 0.06) ||
+            (Number.isFinite(sample.headY) && Math.abs(sample.headY - (baseline.headY ?? sample.headY)) < 0.06))));
         if (!stable) {
           calibrationSince = null;
           baseline = null;
