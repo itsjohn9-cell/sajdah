@@ -192,13 +192,10 @@ function checkOpticalProximity(points, isCovered = false) {
 function computeFaceScale(points) {
   if (!points || !points[0]) return 0;
   if (points[7] && points[8] && (points[7].visibility ?? 1) > 0.25 && (points[8].visibility ?? 1) > 0.25) {
-    return Math.hypot(points[7].x - points[8].x, points[7].y - points[8].y) * 2.5;
+    return Math.hypot(points[7].x - points[8].x, points[7].y - points[8].y) * 2.0;
   }
-  if (points[2] && points[5] && (points[2].visibility ?? 1) > 0.25 && (points[5].visibility ?? 1) > 0.25) {
-    return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 5.0;
-  }
-  if (points[11] && points[12] && (points[11].visibility ?? 1) > 0.25 && (points[12].visibility ?? 1) > 0.25) {
-    return Math.hypot(points[11].x - points[12].x, points[11].y - points[12].y) * 0.9;
+  if (points[2] && points[5] && (points[2].visibility ?? 1) > 0.25 && (points[2].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 4.0;
   }
   return 0;
 }
@@ -474,8 +471,9 @@ function loop(time) {
           if (multipleClearFrames >= 20) {
             multipleClearFrames = 0;
             multipleFrames = 0;
-            counter.restartCurrent();
-            status("Tracking resumed automatically. Stand upright to continue.");
+            counter.paused = false;
+            counter.reason = "";
+            status("Tracking resumed automatically.");
             render();
           }
         } else {
@@ -573,8 +571,9 @@ $("calibrate").addEventListener("click", () => {
   render();
 });
 $("resume").addEventListener("click", () => {
-  counter.restartCurrent();
-  status("Current partial rakat cleared. Stand upright to restart detection.");
+  counter.paused = false;
+  counter.reason = "";
+  status("Tracking resumed.");
   render();
 });
 $("undo").addEventListener("click", () => {

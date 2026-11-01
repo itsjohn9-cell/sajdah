@@ -803,3 +803,34 @@ test("Regression: setup calibration rejects sitting pose on mat mode and only pa
   assert.equal(standingCal.mode, "mat");
   assert.equal(standingCal.headY, 0.22);
 });
+
+
+test("Regression: standing at normal distance (headY = 0.42) calibrates in Mat Mode and classifies as standing, not sitting", () => {
+  const standing = upperBodyLandmarks({ headY: 0.42, shoulderY: 0.58 });
+  const cal = standingCalibration(standing, { allowAdaptive: true, mode: "mat", orientation: "flat" });
+  assert.ok(cal, "Standing at headY = 0.42 must successfully calibrate in Mat Mode");
+  assert.equal(cal.mode, "mat");
+
+  const posture = classifyPose(standing, cal, { mode: "mat", orientation: "flat" });
+  assert.equal(posture, "standing", "Standing upright at headY = 0.42 must classify as standing, NEVER sitting");
+});
+
+test("Regression: floor reflection during prostration/sitting does not trigger false multiple people", () => {
+  // Worshipper in sajdah on the floor (centroidY ~0.72, noseY ~0.78)
+  const worshipperInSajdah = upperBodyLandmarks({ headY: 0.78, shoulderY: 0.70 });
+  for (let i = 0; i <= 24; i++) {
+    if (worshipperInSajdah[i]) worshipperInSajdah[i].visibility = 0.90;
+  }
+
+  // Reflection on glossy floor beneath the worshipper (centroidY ~0.88, noseY ~0.85)
+  const floorReflection = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.88, z: 0, visibility: 0.80 }));
+  floorReflection[0] = { x: 0.5, y: 0.85, z: 0, visibility: 0.82 };
+  floorReflection[11] = { x: 0.45, y: 0.88, z: 0, visibility: 0.78 };
+  floorReflection[12] = { x: 0.55, y: 0.88, z: 0, visibility: 0.78 };
+  floorReflection[23] = { x: 0.47, y: 0.90, z: 0, visibility: 0.75 };
+  floorReflection[24] = { x: 0.53, y: 0.90, z: 0, visibility: 0.75 };
+
+  const { pose, isMultiple } = selectPrimaryPose([worshipperInSajdah, floorReflection]);
+  assert.equal(isMultiple, false, "Floor reflection during prostration must NOT flag multiple people");
+  assert.ok(pose, "Worshipper pose must be tracked");
+});

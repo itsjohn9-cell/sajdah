@@ -333,7 +333,7 @@ export function adaptiveCalibration(points, options = {}) {
     const up = upperFeatures(points, 0.4);
     if (up && up.head && up.shoulder) {
       const torsoUpright = up.head.y < up.shoulder.y - 0.04;
-      if (torsoUpright && up.head.y < 0.40) {
+      if (torsoUpright && up.head.y < 0.50) {
         return {
           mode: "mat",
           orientation: options.orientation || "flat",
@@ -343,7 +343,6 @@ export function adaptiveCalibration(points, options = {}) {
         };
       }
     }
-    return null;
   }
 
   // 3. Try side profile
@@ -386,15 +385,11 @@ export function estimateFaceScale(points) {
   if (!Array.isArray(points) || !points[0]) return 0;
   // Ear span (landmarks 7 & 8)
   if (points[7] && points[8] && (points[7].visibility ?? 1) > 0.25 && (points[8].visibility ?? 1) > 0.25) {
-    return Math.hypot(points[7].x - points[8].x, points[7].y - points[8].y) * 2.5;
+    return Math.hypot(points[7].x - points[8].x, points[7].y - points[8].y) * 2.0;
   }
   // Eye span (landmarks 2 & 5) scaled to ear equivalent
   if (points[2] && points[5] && (points[2].visibility ?? 1) > 0.25 && (points[5].visibility ?? 1) > 0.25) {
-    return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 5.0;
-  }
-  // Shoulder span (landmarks 11 & 12) scaled to face equivalent
-  if (points[11] && points[12] && (points[11].visibility ?? 1) > 0.25 && (points[12].visibility ?? 1) > 0.25) {
-    return Math.hypot(points[11].x - points[12].x, points[11].y - points[12].y) * 0.9;
+    return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 4.0;
   }
   return 0;
 }
@@ -428,9 +423,13 @@ export function classifyPose(points, calibration, context = {}) {
 
       // Torso is upright if head is clearly above shoulders
       const torsoUpright = up.shoulder && up.head.y < up.shoulder.y - 0.04;
-
       // Upright posture close to camera or with lower head position is sitting (Jalsah / Tashahhud)
-      if (torsoUpright && (faceScale > 0.25 || (calibration.headY && up.head.y >= calibration.headY + 0.12) || up.head.y >= 0.35)) {
+      const headDrop = calibration.headY !== undefined ? (up.head.y - calibration.headY) : 0;
+      const span = calibration.torsoSpan || 0.15;
+      const isSittingDrop = headDrop > span * 1.0 || headDrop > 0.18;
+      const isSittingFace = faceScale > 0.35;
+
+      if (torsoUpright && (isSittingFace || isSittingDrop || (up.head.y >= 0.55 && up.shoulder && up.shoulder.y >= 0.65))) {
         return "sitting";
       }
 
@@ -689,7 +688,7 @@ export function selectPrimaryPose(poses) {
     Math.abs(second.centroidX - top.centroidX) < 0.15 &&
     second.centroidY > 0.70 &&
     second.noseY > 0.65 &&
-    top.centroidY < 0.60
+    second.centroidY > top.centroidY + 0.08
   );
 
   // If the second pose is merely a floor reflection, ignore it and track the worshipper:
