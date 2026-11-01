@@ -189,6 +189,20 @@ function checkOpticalProximity(points, isCovered = false) {
   return false;
 }
 
+function computeFaceScale(points) {
+  if (!points || !points[0]) return 0;
+  if (points[7] && points[8] && (points[7].visibility ?? 1) > 0.25 && (points[8].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[7].x - points[8].x, points[7].y - points[8].y) * 2.5;
+  }
+  if (points[2] && points[5] && (points[2].visibility ?? 1) > 0.25 && (points[5].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 5.0;
+  }
+  if (points[11] && points[12] && (points[11].visibility ?? 1) > 0.25 && (points[12].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[11].x - points[12].x, points[11].y - points[12].y) * 0.9;
+  }
+  return 0;
+}
+
 function setScreenLight(enabled) {
   screenLight = enabled;
   document.body.classList.toggle("screen-light", enabled);
@@ -311,6 +325,9 @@ function stop(message = "Camera stopped. Review your estimates before continuing
   calibration = null;
   calibrating = false;
   interruptions++;
+  if (counter.phase === "exit" && counter.sajdahs === 2) {
+    counter.commitExitRakat();
+  }
   counter.pause("Camera stopped. Restart the current rakat after calibration.");
   status(message);
   render();
@@ -486,12 +503,14 @@ function loop(time) {
           (lightingMonitor.condition === "dim" && (counter.phase === "firstSajdah" || counter.phase === "between" || counter.phase === "secondSajdah")));
         const isCovered = (sensorData.proximity === true) || isDimFromSajdah;
         const opticalProx = checkOpticalProximity(points, isCovered);
+        const faceScale = computeFaceScale(points);
         const context = {
           ...sensorData,
           opticalProximity: opticalProx,
           isCovered,
           orientation,
           pitch: devicePitch,
+          faceScale,
           allowPartial: true,
           mode: calibration?.mode || (orientation === "flat" || Math.abs(devicePitch) <= 45 ? "mat" : "upper"),
         };

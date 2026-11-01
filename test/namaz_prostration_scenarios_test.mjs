@@ -687,3 +687,84 @@ test("Regression: clean sitting in exit phase completes rakat for final Tashahhu
   assert.equal(counter.rakats.length, 1, "Sitting in exit phase must complete the rakat");
   assert.equal(counter.complete, false, "One rakat done, second still needed");
 });
+
+test("Regression: Mat Mode classifies sitting upright when faceScale is estimated from landmarks without context.faceScale override", () => {
+  const matCal = { mode: "mat", orientation: "flat", headY: 0.18 };
+
+  // Sitting landmarks on the floor: head is upright above shoulders, face is close to camera
+  const sitting = upperBodyLandmarks({ headY: 0.45, shoulderY: 0.65 });
+  // Add ear landmarks to sitting pose reflecting 0.7m close-up distance on prayer mat (ears span 0.18)
+  sitting[7] = { x: 0.41, y: 0.45, visibility: 0.9 };
+  sitting[8] = { x: 0.59, y: 0.45, visibility: 0.9 };
+
+  // Must classify as sitting even when NO context.faceScale is provided!
+  const posture = classifyPose(sitting, matCal, { mode: "mat", orientation: "flat" });
+  assert.equal(posture, "sitting", "Sitting upright in Mat Mode must classify as sitting using auto-estimated landmarks");
+});
+
+test("Regression: Replay feedback d3e8ab25 - 2-Rakat prayer with 4 Sajdahs and final Tashahhud completes Rakat 2", () => {
+  // Replay exact user transition sequence from feedback reports d3e8ab25 and a55a249b
+  const s = namazSession(2);
+
+  // Cold start & Rakat 1 Qiyam
+  s.hold("standing", 1200);
+  assert.equal(s.counter.phase, "bow");
+
+  // Rakat 1 Sajdah 1
+  s.hold("sajdah", 1200);
+  assert.equal(s.counter.sajdahs, 1);
+  assert.equal(s.counter.phase, "between");
+
+  // Rakat 1 Jalsah (sitting/upright)
+  s.hold("sitting", 800);
+  assert.equal(s.counter.phase, "secondSajdah");
+
+  // Rakat 1 Sajdah 2
+  s.hold("sajdah", 1200);
+  assert.equal(s.counter.sajdahs, 2);
+  assert.equal(s.counter.phase, "exit");
+
+  // Rise to stand for Rakat 2
+  s.hold("standing", 1000);
+  assert.equal(s.counter.rakats.length, 1, "Rakat 1 must be completed");
+  assert.equal(s.counter.sajdahs, 0);
+
+  // Rakat 2 Sajdah 1
+  s.hold("sajdah", 1200);
+  assert.equal(s.counter.sajdahs, 1);
+  assert.equal(s.counter.phase, "between");
+
+  // Rakat 2 Jalsah
+  s.hold("sitting", 800);
+  assert.equal(s.counter.phase, "secondSajdah");
+
+  // Rakat 2 Sajdah 2
+  s.hold("sajdah", 1200);
+  assert.equal(s.counter.sajdahs, 2);
+  assert.equal(s.counter.phase, "exit");
+
+  // Final Tashahhud: user sits upright in front of camera
+  s.hold("sitting", 1000);
+  assert.equal(s.counter.rakats.length, 2, "Rakat 2 must complete upon Tashahhud sitting!");
+  assert.equal(s.counter.complete, true, "Both 2 Rakats must be fully completed!");
+});
+
+test("Regression: commitExitRakat commits rakat when user stops session in exit phase after 2 sajdahs", () => {
+  const counter = new RakatCounter(2, { adaptive: true });
+
+  // Rakat 1 completed
+  counter.rakats.push({ sajdahs: 2 });
+
+  // Rakat 2 in progress: both sajdahs finished, waiting in exit phase
+  counter.sajdahs = 2;
+  counter.phase = "exit";
+
+  assert.equal(counter.rakats.length, 1);
+  assert.equal(counter.complete, false);
+
+  // User finishes prayer and taps Stop
+  counter.commitExitRakat();
+
+  assert.equal(counter.rakats.length, 2, "Rakat 2 must be committed");
+  assert.equal(counter.complete, true, "Prayer must be marked complete");
+});

@@ -209,6 +209,16 @@ export class RakatCounter {
     this.rakats.pop();
     this.restartCurrent();
   }
+
+  commitExitRakat(posture = "sitting") {
+    if (this.phase === "exit" && this.sajdahs === 2) {
+      this.rakats.push({ sajdahs: 2 });
+      this.sajdahs = 0;
+      this.leftFirstSajdah = false;
+      this.hasStood = posture === "standing";
+      this.phase = posture === "standing" ? "bow" : "standing";
+    }
+  }
 }
 
 export function visible(point, minConfidence = 0.65) {
@@ -359,6 +369,23 @@ export function adaptiveCalibration(points, options = {}) {
   return null;
 }
 
+export function estimateFaceScale(points) {
+  if (!Array.isArray(points) || !points[0]) return 0;
+  // Ear span (landmarks 7 & 8)
+  if (points[7] && points[8] && (points[7].visibility ?? 1) > 0.25 && (points[8].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[7].x - points[8].x, points[7].y - points[8].y) * 2.5;
+  }
+  // Eye span (landmarks 2 & 5) scaled to ear equivalent
+  if (points[2] && points[5] && (points[2].visibility ?? 1) > 0.25 && (points[5].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 5.0;
+  }
+  // Shoulder span (landmarks 11 & 12) scaled to face equivalent
+  if (points[11] && points[12] && (points[11].visibility ?? 1) > 0.25 && (points[12].visibility ?? 1) > 0.25) {
+    return Math.hypot(points[11].x - points[12].x, points[11].y - points[12].y) * 0.9;
+  }
+  return 0;
+}
+
 export function classifyPose(points, calibration, context = {}) {
   if (!calibration) return "unknown";
 
@@ -382,19 +409,31 @@ export function classifyPose(points, calibration, context = {}) {
   if (calibration.mode === "mat" || context.mode === "mat" || context.orientation === "flat") {
     const up = upperFeatures(points, 0.4);
     if (up && up.head) {
-      // Upright face close to camera is sitting (Jalsah / Tashahhud)
-      if (context.faceScale && context.faceScale > 0.35 && (!up.shoulder || up.head.y < up.shoulder.y)) {
+      const faceScale = Number.isFinite(context.faceScale)
+        ? context.faceScale
+        : estimateFaceScale(points);
+
+      // Torso is upright if head is clearly above shoulders
+      const torsoUpright = up.shoulder && up.head.y < up.shoulder.y - 0.04;
+
+      // Upright posture close to camera or with lower head position is sitting (Jalsah / Tashahhud)
+      if (torsoUpright && (faceScale > 0.25 || (calibration.headY && up.head.y >= calibration.headY + 0.12) || up.head.y >= 0.35)) {
         return "sitting";
       }
+
       // Horizontal torso at mid-height is bow (Ruku)
       const isBow = up.shoulder && Math.abs(up.head.y - up.shoulder.y) < 0.08 && up.head.y < 0.65;
       if (isBow) {
         return "bow";
       }
+
       // Head descending to the mat at or below shoulder height is sajdah
-      const isSajdah = up.head.y >= 0.65 ||
+      // Must NOT be torsoUpright (if head is clearly above shoulders, it cannot be sajdah)
+      const isSajdah = !torsoUpright && (
+        up.head.y >= 0.60 ||
         (up.shoulder && up.head.y >= up.shoulder.y - 0.05 && up.head.y >= 0.50) ||
-        (calibration.headY && up.head.y >= calibration.headY + 0.25 && (!up.shoulder || up.head.y >= up.shoulder.y - 0.05));
+        (calibration.headY && up.head.y >= calibration.headY + 0.25)
+      );
       if (isSajdah) {
         return "sajdah";
       }
