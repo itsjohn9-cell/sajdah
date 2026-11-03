@@ -97,7 +97,7 @@ class _SijdaAppState extends State<SijdaApp> {
                     padding: const EdgeInsets.all(24),
                     child: Text(
                       'Your saved data could not be opened. Please restart '
-                      'Sijda. Your data has not been overwritten.\n\n'
+                      'Sajdah. Your data has not been overwritten.\n\n'
                       '${snapshot.error}',
                     ),
                   ),

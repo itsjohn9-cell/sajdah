@@ -167,7 +167,7 @@ test("Scenario 4: Prolonged prostration (Dua in Sujud) never double-counts or ca
   assert.equal(s.counter.rakats.length, 1);
 });
 
-test("Scenario 5: Brief accidental hand-sweep or shadow (<600ms) does not advance sajdah count", () => {
+test("Scenario 5: Brief accidental hand-sweep or shadow (<400ms) does not advance sajdah count", () => {
   const s = namazSession(2);
   s.hold("standing");
   s.hold("bow");
@@ -184,15 +184,14 @@ test("Scenario 5: Brief accidental hand-sweep or shadow (<600ms) does not advanc
   assert.equal(s.counter.sajdahs, 1);
 });
 
-test("Scenario 6: Optical occlusion detects sajdah on devices without hardware proximity sensor", () => {
+test("Scenario 6: Darkness alone cannot establish sajdah without camera evidence", () => {
   const matCal = { mode: "mat", orientation: "flat" };
 
-  // 1. Device with hardware proximity sensor
-  assert.equal(classifyPose(null, matCal, { proximity: true }), "sajdah");
+  assert.equal(classifyPose(null, matCal, { proximity: true }), "unknown");
 
   // 2. Device WITHOUT proximity sensor: camera lens occluded/darkened by forehead
-  assert.equal(classifyPose(null, matCal, { isCovered: true, proximity: false }), "sajdah");
-  assert.equal(classifyPose(null, matCal, { opticalProximity: true, proximity: false }), "sajdah");
+  assert.equal(classifyPose(null, matCal, { isCovered: true, proximity: false }), "unknown");
+  assert.equal(classifyPose(null, matCal, { opticalProximity: true, proximity: false }), "unknown");
 
   // 3. User raises head back into sitting position: lens is uncovered, face at sitting scale
   const sitting = upperBodyLandmarks({ headY: 0.45, shoulderY: 0.65 });
@@ -270,7 +269,7 @@ test("Scenario 10: Frame 0 proximity or leaning over phone does not prematurely 
   assert.equal(s.counter.phase, "between");
 });
 
-test("Scenario 11: Android Proximity FAR value (5.0cm) does not falsely trigger sajdah, NEAR (0.0cm) does", () => {
+test("Scenario 11: Proximity flags cannot override a visible upright camera pose", () => {
   const cal = { mode: "mat" };
   const points = upperBodyLandmarks({ headY: 0.22, shoulderY: 0.40 });
 
@@ -291,7 +290,7 @@ test("Scenario 11: Android Proximity FAR value (5.0cm) does not falsely trigger 
     proximityMaxRange: 5.0,
   };
   const nearPosture = classifyPose(points, cal, nearContext);
-  assert.equal(nearPosture, "sajdah", "NEAR proximity must trigger sajdah");
+  assert.equal(nearPosture, "standing", "Visible upright posture must not be overridden by proximity");
 });
 
 test("Scenario 12: Carpet/floor reflection poses are filtered out and primary worshipper is tracked", () => {
@@ -350,8 +349,8 @@ test("Scenario 13: Full 2-Rakat prayer when Jalsah appears as standing from unde
   assert.equal(s.counter.sajdahs, 0);
 });
 
-test("Scenario 14: Replay real S24 Ultra feedback - second sajdah counted and rakat completes without getting stuck", () => {
-  // Replay exact user transition sequence from feedback report sessionId 31c42319-5946-49a8-9ad8-c614f58ceae1
+test("Scenario 14: Synthetic coarse-transition regression with a short, observed separator", () => {
+  // Transition logs are not frame recordings; explicit separator holds are supplied here.
   const counter = new RakatCounter(2, { adaptive: true });
 
   // 1. Frame 0: user leaning over phone to tap start
@@ -394,6 +393,7 @@ test("Scenario 14: Replay real S24 Ultra feedback - second sajdah counted and ra
   counter.observe("sajdah", 9700);
   assert.equal(counter.sajdahs, 1);
   counter.observe("standing", 10400);
+  counter.observe("standing", 10600);
   counter.observe("sajdah", 11100);
   counter.observe("sajdah", 11800);
   assert.equal(counter.sajdahs, 2);
@@ -426,7 +426,7 @@ test("Scenario 15: Replay Report 5 - floor reflection during bow does not trigge
   assert.equal(posture, "bow", "Must classify as bow");
 });
 
-test("Scenario 16: Replay Report 6 - Screen light on mat mode detects sajdah by pose and avoids body tracking timeout during prolonged prostration", () => {
+test("Scenario 16: Synthetic proximity-supported occlusion preserves a long sajdah without duplicates", () => {
   const matCal = { mode: "mat", orientation: "flat", headY: 0.25 };
   const screenLightContext = {
     mode: "mat",
@@ -463,10 +463,10 @@ test("Scenario 16: Replay Report 6 - Screen light on mat mode detects sajdah by 
   assert.equal(counter.sajdahs, 1);
   assert.equal(counter.phase, "between");
 
-  // Forehead on floor for 6 seconds (Dhikr / Dua in Sujud) where tracking becomes unknown
+  // Camera occluded, but a supported proximity signal continues.
   for (let t = 5000; t <= 11000; t += 1000) {
-    counter.observe("unknown", t);
-    assert.equal(counter.paused, false, `Must NOT pause with body tracking lost during prostration at ${t}ms`);
+    counter.observe("sajdah", t, { source: "proximity" });
+    assert.equal(counter.paused, false, `Supported proximity remains usable at ${t}ms`);
   }
   assert.equal(counter.sajdahs, 1);
 
@@ -481,9 +481,9 @@ test("Scenario 16: Replay Report 6 - Screen light on mat mode detects sajdah by 
   assert.equal(counter.sajdahs, 2);
   assert.equal(counter.phase, "exit");
 
-  // Prolonged second Sajdah (5 seconds with unknown tracking while prostrating)
+  // Prolonged second sajdah with continued proximity support.
   for (let t = 15000; t <= 20000; t += 1000) {
-    counter.observe("unknown", t);
+    counter.observe("sajdah", t, { source: "proximity" });
     assert.equal(counter.paused, false, `Must NOT pause during second sajdah at ${t}ms`);
   }
 
@@ -538,6 +538,7 @@ test("Scenario 17: Shia Qunoot in Rakat 2 (raising hands before face during stan
   counter.observe("sajdah", 4000);
   counter.observe("sajdah", 4700);
   counter.observe("sitting", 5400);
+  counter.observe("sitting", 5600);
   counter.observe("sajdah", 6100);
   counter.observe("sajdah", 6800);
   counter.observe("standing", 7500);
@@ -561,6 +562,7 @@ test("Scenario 17: Shia Qunoot in Rakat 2 (raising hands before face during stan
   counter.observe("sajdah", 21000);
   counter.observe("sajdah", 21700);
   counter.observe("sitting", 22500);
+  counter.observe("sitting", 22700);
   counter.observe("sajdah", 23200);
   counter.observe("sajdah", 23900);
   counter.observe("sitting", 24600);
@@ -678,6 +680,7 @@ test("Regression: clean sitting in exit phase completes rakat for final Tashahhu
   counter.observe("sajdah", 2400);
   counter.observe("sajdah", 3100);
   counter.observe("standing", 3800);
+  counter.observe("standing", 4000);
   counter.observe("sajdah", 4500);
   counter.observe("sajdah", 5200);
   assert.equal(counter.phase, "exit");
@@ -750,7 +753,7 @@ test("Regression: Replay feedback d3e8ab25 - 2-Rakat prayer with 4 Sajdahs and f
   assert.equal(s.counter.complete, true, "Both 2 Rakats must be fully completed!");
 });
 
-test("Regression: commitExitRakat commits rakat when user stops session in exit phase after 2 sajdahs", () => {
+test("Regression: stopping cannot complete a cycle without observed exit evidence", () => {
   const counter = new RakatCounter(2, { adaptive: true });
 
   // Rakat 1 completed
@@ -764,10 +767,11 @@ test("Regression: commitExitRakat commits rakat when user stops session in exit 
   assert.equal(counter.complete, false);
 
   // User finishes prayer and taps Stop
-  counter.commitExitRakat();
+  counter.pause("Camera stopped");
 
-  assert.equal(counter.rakats.length, 2, "Rakat 2 must be committed");
-  assert.equal(counter.complete, true, "Prayer must be marked complete");
+  assert.equal(counter.rakats.length, 1, "Only the completed estimate is retained");
+  assert.equal(counter.sajdahs, 2, "Partial sajdahs remain visible for review");
+  assert.equal(counter.complete, false);
 });
 
 test("Regression: two people in room with unequal scores are correctly detected as multiple people", () => {

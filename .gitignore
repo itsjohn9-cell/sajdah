@@ -45,7 +45,9 @@ android/key.properties
 .env.*
 !.env.example
 **/signing.properties
+*service-account*.json
 *-feedback-report.json
+/files/releases/*.apk
 # Download locally from the upstream URL; redistribution terms are not verified.
 /web/vendor/mediapipe/pose_landmarker_lite.task
 
@@ -73,4 +75,3 @@ ios/Runner/GoogleService-Info.plist
 .venv/
 test/fixtures/videos/
 *.mp4
-

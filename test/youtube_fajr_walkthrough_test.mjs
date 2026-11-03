@@ -9,7 +9,7 @@ import {
   selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
 
-test("Replay real YouTube Fajr Walkthrough video (hndtN2NH4uc): 100% natural end-to-end 2 Rakats and 4 Sajdahs", () => {
+test("Extracted walkthrough landmarks retain two rakat estimates without posture substitutions", () => {
   const fixturePath = path.resolve("test/fixtures/fajr_prayer_walkthrough_landmarks.json");
   assert.ok(fs.existsSync(fixturePath), "Fixture fajr_prayer_walkthrough_landmarks.json must exist");
 
@@ -51,4 +51,3 @@ test("Replay real YouTube Fajr Walkthrough video (hndtN2NH4uc): 100% natural end
   assert.equal(counter.complete, true, "Prayer session must be marked complete");
   assert.equal(counter.paused, false, "Counter must not pause during valid prayer");
 });
-

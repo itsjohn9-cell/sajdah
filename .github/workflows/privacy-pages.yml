@@ -1,11 +1,8 @@
-name: Publish privacy policy
+name: Publish Sajdah web app
 
 on:
   push:
     branches: [main]
-    paths:
-      - web/privacy.html
-      - .github/workflows/privacy-pages.yml
   workflow_dispatch:
 
 permissions:
@@ -14,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: privacy-pages
+  group: sajdah-pages
   cancel-in-progress: false
 
 jobs:
@@ -25,15 +22,38 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - name: Prepare policy-only site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Validate app and camera
         run: |
-          mkdir policy-site
-          cp web/privacy.html policy-site/index.html
-          cp web/privacy.html policy-site/privacy.html
+          npm ci
+          npm run lint
+          npm test
+          flutter pub get --enforce-lockfile
+          flutter analyze --fatal-infos
+          flutter test
+      - name: Download and verify bundled pose model
+        run: |
+          curl --fail --location \
+            'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task' \
+            --output web/vendor/mediapipe/pose_landmarker_lite.task
+          echo '59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a  web/vendor/mediapipe/pose_landmarker_lite.task' | sha256sum --check
+      - uses: actions/configure-pages@v5
+      - name: Build complete web app
+        run: |
+          flutter build web --base-href /sajdah/
+          test -f build/web/rakat/sensors.mjs
+          test -f build/web/vendor/mediapipe/pose_landmarker_lite.task
+          test -f build/web/privacy.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: policy-site
-      - name: Deploy policy
+          path: build/web
+      - name: Deploy web app and policy
         id: deployment
         uses: actions/deploy-pages@v4

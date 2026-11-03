@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sijda/main.dart';
 import 'package:sijda/src/store.dart';
 
@@ -35,11 +36,19 @@ void main() {
   testWidgets('about dialog exposes privacy policy and deletion contact', (
     tester,
   ) async {
+    PackageInfo.setMockInitialValues(
+      appName: 'Sajdah',
+      packageName: 'app.sijda.sijda',
+      version: '0.1.18',
+      buildNumber: '19',
+      buildSignature: '',
+    );
     await tester.pumpWidget(SijdaApp(store: SijdaStore(MemoryStorage())));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('About and privacy'));
     await tester.pumpAndSettle();
     expect(find.text('Read full privacy policy'), findsOneWidget);
+    expect(find.text('0.1.18 (19)'), findsOneWidget);
     expect(
       find.text('Privacy and deletion: fehmatics@gmail.com'),
       findsOneWidget,

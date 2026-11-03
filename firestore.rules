@@ -21,7 +21,7 @@ service cloud.firestore {
         && request.resource.data.id == reportId
         && shortText(reportId, 64)
         && shortText(request.resource.data.sessionId, 64)
-        && request.resource.data.algorithmVersion == 'pose-heuristic-v2'
+        && request.resource.data.algorithmVersion in ['pose-heuristic-v2', 'sensor-assisted-v3']
         && request.resource.data.target in [2, 3, 4]
         && count(request.resource.data.detectedRakat, 4)
         && count(request.resource.data.detectedSajdahs, 10)

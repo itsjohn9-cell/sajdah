@@ -10,8 +10,6 @@ const POSSIBLE_KEY_PATHS = [
   process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY,
   path.resolve(process.env.HOME || '', '.config/sijda/play-service-account.json'),
   path.resolve(process.env.HOME || '', '.karachi-runner-keys/play-service-account.json'),
-  path.resolve('play-service-account.json'),
-  path.resolve('.play-service-account.json')
 ].filter(Boolean);
 
 const args = process.argv.slice(2);
@@ -79,14 +77,15 @@ const fileSizeMb = (fs.statSync(aabPath).size / (1024 * 1024)).toFixed(2);
 console.log(`📊 AAB File Size: ${fileSizeMb} MB`);
 
 async function publish() {
+  const play = google.androidpublisher({ version: 'v3', auth: authClient });
+  let editId = null;
+  let committed = false;
   try {
-    const play = google.androidpublisher({ version: 'v3', auth: authClient });
-
     console.log('\n🚀 [1/5] Starting Play Console Edit transaction...');
     const editRes = await play.edits.insert({
       packageName: PACKAGE_NAME
     });
-    const editId = editRes.data.id;
+    editId = editRes.data.id;
     console.log(`✔ Edit Session Created: [${editId}]`);
 
     console.log(`🚀 [2/5] Uploading ${fileSizeMb} MB App Bundle to Play Console...`);
@@ -105,24 +104,25 @@ async function publish() {
     } catch (uploadErr) {
       const msg = uploadErr.response?.data?.error?.message || uploadErr.message || '';
       if (msg.includes('already been used')) {
-        console.log(`✔ Notice: ${msg}`);
-        console.log(`ℹ Version bundle is already uploaded and live on Play Console.\n`);
-        return;
+        throw new Error('Bundle version code is already used. Verify its track/status in Play Console; upload history does not confirm publication.');
       }
       throw uploadErr;
     }
 
     // Parse version from pubspec.yaml
     const pubspec = fs.readFileSync(path.resolve('pubspec.yaml'), 'utf8');
-    const versionMatch = pubspec.match(/version:\s*([^\s+]+)/);
-    const versionName = versionMatch ? versionMatch[1] : '0.1.3';
+    const versionMatch = pubspec.match(/version:\s*([^\s+]+)\+(\d+)/);
+    if (!versionMatch || String(versionCode) !== versionMatch[2]) {
+      throw new Error('Uploaded bundle version does not match pubspec.yaml. Stop and rebuild the release.');
+    }
+    const versionName = versionMatch[1];
 
     console.log(`🚀 [3/5] Assigning Version Code ${versionCode} (${versionName}) to tracks: [${tracks.join(', ')}]...`);
     const releaseStatus = isDraft ? 'draft' : 'completed';
     const releaseNotes = [
       {
         language: 'en-US',
-        text: 'v0.1.13: Hands-free Voice Mode for Tasbeeh counting by speech recognition (Allahu Akbar, Alhamdulillah, SubhanAllah), unified modern Islamic emerald UI theme, and audio permission support.'
+        text: `${versionName}: Experimental camera-required, sensor-assisted rakat estimates with faster movement filters, distinct sajdah release detection and per-phase evidence. Improved restart, privacy and data safeguards. Real-phone counting accuracy remains unverified; review estimates and use manual counting if uncertain.`
       }
     ];
 
@@ -158,11 +158,12 @@ async function publish() {
       packageName: PACKAGE_NAME,
       editId
     });
+    committed = true;
 
     console.log('====================================================');
     console.log('🎉 SUCCESSFULLY PUBLISHED TO GOOGLE PLAY CONSOLE!   ');
     console.log('====================================================');
-    console.log(`App Name    : Sijda`);
+    console.log(`App Name    : Sajdah`);
     console.log(`Package ID  : ${PACKAGE_NAME}`);
     console.log(`Track       : ${tracks.join(', ').toUpperCase()}`);
     console.log(`Status      : ${releaseStatus.toUpperCase()}`);
@@ -189,9 +190,17 @@ async function publish() {
       console.log('6. Click "Apply" and "Save changes".');
       console.log('7. Re-run: npm run publish:play\n');
     }
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    if (editId && !committed) {
+      try {
+        await play.edits.delete({ packageName: PACKAGE_NAME, editId });
+      } catch (error) {
+        console.error('Could not discard the uncommitted Play edit:', error.message);
+        process.exitCode = 1;
+      }
+    }
   }
 }
 
 publish();
-

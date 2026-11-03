@@ -53,10 +53,10 @@ if (typeof document.querySelectorAll === "function") {
         verdictBanner.hidden = false;
         if (isCorrect) {
           verdictBanner.style.color = "#176b58";
-          verdictBanner.textContent = `✅ Perfect match! You prayed ${actualRakat} rakat(s) and Sijda detected ${detectedRakat} rakat(s).`;
+          verdictBanner.textContent = `✅ Perfect match! You prayed ${actualRakat} rakat(s) and Sajdah detected ${detectedRakat} rakat(s).`;
         } else {
           verdictBanner.style.color = "#a33";
-          verdictBanner.textContent = `⚠️ Mismatch: You prayed ${actualRakat} rakat(s), but Sijda detected ${detectedRakat} rakat(s) (${snapshot.detectedSajdahs} sajdahs). Detailed log is ready below.`;
+          verdictBanner.textContent = `⚠️ Mismatch: You prayed ${actualRakat} rakat(s), but Sajdah detected ${detectedRakat} rakat(s) (${snapshot.detectedSajdahs} sajdahs). Detailed log is ready below.`;
         }
       }
 

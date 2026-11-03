@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'store.dart';
@@ -21,7 +22,9 @@ class _SijdaHomeState extends State<SijdaHome> {
   int _rakatTarget = 2;
 
   Future<void> _openPrivacyPolicy() async {
-    final uri = Uri.parse('https://itsjohn9-cell.github.io/sajdah/privacy.html');
+    final uri = Uri.parse(
+      'https://itsjohn9-cell.github.io/sajdah/privacy.html',
+    );
     try {
       if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
       throw StateError('No application could open the privacy policy.');
@@ -46,6 +49,60 @@ class _SijdaHomeState extends State<SijdaHome> {
     }
   }
 
+  Future<void> _showAboutDialog() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      showAboutDialog(
+        context: context,
+        applicationName: 'Sajdah',
+        applicationVersion:
+            '${packageInfo.version} (${packageInfo.buildNumber})',
+        children: [
+          const Text(
+            'A quiet companion for your daily worship.\n\n'
+            'Counters and balances are saved on this device. '
+            'No account or location access is needed. '
+            'Experimental automatic rakat counting requests camera '
+            'access only when started; frames are processed locally. '
+            'Diagnostic video recording is off by default; if enabled, '
+            'it stays in the page unless you download it and is never '
+            'included in feedback uploads. '
+            'Voice tasbeeh uses the microphone only while you explicitly '
+            'start it. Audio is handled by your device or browser speech '
+            'recognition service, which may process it under that provider\'s '
+            'terms; Sajdah does not save or upload audio. '
+            'Optional testing feedback can upload counts, placement, '
+            'device details and posture-transition logs to Firebase '
+            'only with your consent; it never includes camera images. '
+            'Clearing app/browser data removes your records; '
+            'backup and sync are not available yet.\n\n'
+            'This is a personal worship aid, not a religious ruling. '
+            'Islamic terminology and prayer movement sequences follow '
+            'the Islamic Laws (Tawdih al-Masa\'il) of Ayatullah al-Uzma al-Sistani. '
+            'Consult a qualified scholar for individual questions.',
+          ),
+          TextButton(
+            onPressed: _openPrivacyPolicy,
+            child: const Text('Read full privacy policy'),
+          ),
+          TextButton.icon(
+            onPressed: () => _showBackupRestoreDialog(context, widget.store),
+            icon: const Icon(Icons.backup_outlined),
+            label: const Text('Backup & restore data (JSON)'),
+          ),
+          const SelectableText('Privacy and deletion: fehmatics@gmail.com'),
+        ],
+      );
+    } on Exception catch (error, stack) {
+      debugPrint('Sajdah app information failed: $error\n$stack');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load app information.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -66,42 +123,7 @@ class _SijdaHomeState extends State<SijdaHome> {
             actions: [
               IconButton(
                 tooltip: 'About and privacy',
-                onPressed: () => showAboutDialog(
-                  context: context,
-                  applicationName: 'Sajdah',
-                  applicationVersion: '0.1.17',
-                  children: [
-                    const Text(
-                      'A quiet companion for your daily worship.\n\n'
-                      'Counters and balances are saved on this device. '
-                      'No account or location access is needed. '
-                      'Experimental automatic rakat counting requests camera '
-                      'access only when started; frames are processed locally '
-                      'and are not recorded or uploaded. '
-                      'Optional testing feedback can upload counts, placement, '
-                      'device details and posture-transition logs to Firebase '
-                      'only with your consent; it never includes camera images. '
-                      'Clearing app/browser data removes your records; '
-                      'backup and sync are not available yet.\n\n'
-                      'This is a personal worship aid, not a religious ruling. '
-                      'Islamic terminology and prayer movement sequences follow '
-                      'the Islamic Laws (Tawdih al-Masa\'il) of Ayatullah al-Uzma al-Sistani. '
-                      'Consult a qualified scholar for individual questions.',
-                    ),
-                    TextButton(
-                      onPressed: _openPrivacyPolicy,
-                      child: const Text('Read full privacy policy'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _showBackupRestoreDialog(context, store),
-                      icon: const Icon(Icons.backup_outlined),
-                      label: const Text('Backup & restore data (JSON)'),
-                    ),
-                    const SelectableText(
-                      'Privacy and deletion: fehmatics@gmail.com',
-                    ),
-                  ],
-                ),
+                onPressed: _showAboutDialog,
                 icon: const Icon(Icons.info_outline),
               ),
             ],
@@ -174,16 +196,15 @@ class _SijdaHomeState extends State<SijdaHome> {
         Text(
           title,
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F4C3A),
-              ),
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0F4C3A),
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           subtitle,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: const Color(0xFF5A6B63),
-              ),
+          style: Theme.of(context).textTheme.bodyLarge
+              ?.copyWith(color: const Color(0xFF5A6B63)),
         ),
       ],
     ),
@@ -256,15 +277,19 @@ class _SijdaHomeState extends State<SijdaHome> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.stars_rounded, color: Color(0xFFC5A059), size: 20),
+                  const Icon(
+                    Icons.stars_rounded,
+                    color: Color(0xFFC5A059),
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'YOUR JOURNEY',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                          color: const Color(0xFF0F4C3A),
-                        ),
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: const Color(0xFF0F4C3A),
+                    ),
                   ),
                 ],
               ),
@@ -297,7 +322,11 @@ class _SijdaHomeState extends State<SijdaHome> {
                         ],
                       ),
                     ),
-                    Container(width: 1, height: 38, color: const Color(0xFFEBE6DC)),
+                    Container(
+                      width: 1,
+                      height: 38,
+                      color: const Color(0xFFEBE6DC),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -359,7 +388,10 @@ class _SijdaHomeState extends State<SijdaHome> {
       ])
         Card(
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 6,
+            ),
             leading: CircleAvatar(
               backgroundColor: item.$5,
               radius: 22,
@@ -378,12 +410,14 @@ class _SijdaHomeState extends State<SijdaHome> {
       Text(
         'Jurisprudence & Prayer Doubts',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF0F4C3A),
-            ),
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF0F4C3A),
+        ),
       ),
       const SizedBox(height: 6),
-      const Text('Quick reference for doubts in prayer (Shakeyat al-Salat) according to Ayatullah al-Sistani (Tawdih al-Masa\'il).'),
+      const Text(
+        'Quick reference for doubts in prayer (Shakeyat al-Salat) according to Ayatullah al-Sistani (Tawdih al-Masa\'il).',
+      ),
       const SizedBox(height: 10),
       Card(
         elevation: 0,
@@ -398,13 +432,29 @@ class _SijdaHomeState extends State<SijdaHome> {
             children: [
               const Text(
                 'Common Valid Doubts in 4-Rakat Prayers',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4C3A)),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Color(0xFF0F4C3A),
+                ),
               ),
               const SizedBox(height: 8),
-              _doubtRow('Doubt between Rakat 2 & 3 (after 2nd sajdah):', 'Assume 3, finish 4th rakat, then perform 1 rakat of Salat al-Ihtiyat standing.'),
-              _doubtRow('Doubt between Rakat 3 & 4 (any time):', 'Assume 4, finish prayer, then perform 1 rakat standing or 2 rakats sitting of Salat al-Ihtiyat.'),
-              _doubtRow('Doubt between Rakat 2 & 4 (after 2nd sajdah):', 'Assume 4, finish prayer, then perform 2 rakats standing of Salat al-Ihtiyat.'),
-              _doubtRow('Forgetfulness of 1 Sajdah (noticed after ruku):', 'Continue prayer, complete it, perform qada of the missed sajdah, then perform 2 Sajdatay al-Sahw.'),
+              _doubtRow(
+                'Doubt between Rakat 2 & 3 (after 2nd sajdah):',
+                'Assume 3, finish 4th rakat, then perform 1 rakat of Salat al-Ihtiyat standing.',
+              ),
+              _doubtRow(
+                'Doubt between Rakat 3 & 4 (any time):',
+                'Assume 4, finish prayer, then perform 1 rakat standing or 2 rakats sitting of Salat al-Ihtiyat.',
+              ),
+              _doubtRow(
+                'Doubt between Rakat 2 & 4 (after 2nd sajdah):',
+                'Assume 4, finish prayer, then perform 2 rakats standing of Salat al-Ihtiyat.',
+              ),
+              _doubtRow(
+                'Forgetfulness of 1 Sajdah (noticed after ruku):',
+                'Continue prayer, complete it, perform qada of the missed sajdah, then perform 2 Sajdatay al-Sahw.',
+              ),
             ],
           ),
         ),
@@ -413,9 +463,9 @@ class _SijdaHomeState extends State<SijdaHome> {
       Text(
         'Coming next',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF0F4C3A),
-            ),
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF0F4C3A),
+        ),
       ),
       const SizedBox(height: 6),
       const Text('These features are planned, not active in this version.'),
@@ -441,9 +491,19 @@ class _SijdaHomeState extends State<SijdaHome> {
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF2C3E35)),
+        style: const TextStyle(
+          fontSize: 12,
+          height: 1.4,
+          color: Color(0xFF2C3E35),
+        ),
         children: [
-          TextSpan(text: '$doubt ', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F4C3A))),
+          TextSpan(
+            text: '$doubt ',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F4C3A),
+            ),
+          ),
           TextSpan(text: solution),
         ],
       ),
@@ -471,7 +531,11 @@ class _SijdaHomeState extends State<SijdaHome> {
 
   Widget _stepArrow() => const Padding(
     padding: EdgeInsets.symmetric(horizontal: 4),
-    child: Icon(Icons.arrow_forward_ios_rounded, size: 9, color: Color(0xFFC5A059)),
+    child: Icon(
+      Icons.arrow_forward_ios_rounded,
+      size: 9,
+      color: Color(0xFFC5A059),
+    ),
   );
 
   Widget _rakatPage() => Column(
@@ -549,7 +613,11 @@ class _SijdaHomeState extends State<SijdaHome> {
                       color: const Color(0xFF0F4C3A).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.videocam_rounded, color: Color(0xFF0F4C3A), size: 24),
+                    child: const Icon(
+                      Icons.videocam_rounded,
+                      color: Color(0xFF0F4C3A),
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -558,11 +626,18 @@ class _SijdaHomeState extends State<SijdaHome> {
                       children: const [
                         Text(
                           'Hands-Free Camera Tracking',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
                         ),
                         Text(
                           'AI Pose & Proximity Detection',
-                          style: TextStyle(fontSize: 12, color: Color(0xFFC5A059), fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFC5A059),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -600,9 +675,9 @@ class _SijdaHomeState extends State<SijdaHome> {
       Text(
         'Manual counter',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF0F4C3A),
-            ),
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF0F4C3A),
+        ),
       ),
       const SizedBox(height: 8),
       const Text(
@@ -619,7 +694,9 @@ class _SijdaHomeState extends State<SijdaHome> {
               selected: _rakatTarget == target,
               selectedColor: const Color(0xFF0F4C3A),
               labelStyle: TextStyle(
-                color: _rakatTarget == target ? Colors.white : const Color(0xFF0F4C3A),
+                color: _rakatTarget == target
+                    ? Colors.white
+                    : const Color(0xFF0F4C3A),
                 fontWeight: FontWeight.w600,
               ),
               onSelected: _rakat == 0
@@ -649,10 +726,10 @@ class _SijdaHomeState extends State<SijdaHome> {
           child: Text(
             '$_rakat / $_rakatTarget',
             style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F4C3A),
-                  fontSize: 44,
-                ),
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF0F4C3A),
+              fontSize: 44,
+            ),
             semanticsLabel: '$_rakat of $_rakatTarget rakat recorded',
           ),
         ),
@@ -785,7 +862,9 @@ class _SijdaHomeState extends State<SijdaHome> {
         decoration: BoxDecoration(
           color: const Color(0xFF0F4C3A).withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF0F4C3A).withValues(alpha: 0.15)),
+          border: Border.all(
+            color: const Color(0xFF0F4C3A).withValues(alpha: 0.15),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -810,9 +889,13 @@ class _SijdaHomeState extends State<SijdaHome> {
               store.prayersRemaining == 0
                   ? 'All obligatory daily prayers are up to date! Al-hamdulillah.'
                   : 'Total missed prayers: ${store.prayersRemaining}.\n'
-                    '• At 1 prayer/day: ~${(store.prayersRemaining / 1).ceil()} days (~${(store.prayersRemaining / 365).toStringAsFixed(1)} years)\n'
-                    '• At 5 prayers/day (1 full day set): ~${(store.prayersRemaining / 5).ceil()} days',
-              style: const TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF2C3E35)),
+                        '• At 1 prayer/day: ~${(store.prayersRemaining / 1).ceil()} days (~${(store.prayersRemaining / 365).toStringAsFixed(1)} years)\n'
+                        '• At 5 prayers/day (1 full day set): ~${(store.prayersRemaining / 5).ceil()} days',
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: Color(0xFF2C3E35),
+              ),
             ),
           ],
         ),
@@ -855,7 +938,10 @@ class _SijdaHomeState extends State<SijdaHome> {
     }
   }
 
-  Future<void> _showBackupRestoreDialog(BuildContext context, SijdaStore store) async {
+  Future<void> _showBackupRestoreDialog(
+    BuildContext context,
+    SijdaStore store,
+  ) async {
     final jsonExport = store.exportJson();
     final importController = TextEditingController();
     await showDialog<void>(
@@ -874,7 +960,10 @@ class _SijdaHomeState extends State<SijdaHome> {
                   style: TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 14),
-                const Text('Current Backup (Copy to save):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const Text(
+                  'Current Backup (Copy to save):',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.all(8),
@@ -884,7 +973,10 @@ class _SijdaHomeState extends State<SijdaHome> {
                   ),
                   child: SelectableText(
                     jsonExport,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -892,14 +984,19 @@ class _SijdaHomeState extends State<SijdaHome> {
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: jsonExport));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Backup JSON copied to clipboard!')),
+                      const SnackBar(
+                        content: Text('Backup JSON copied to clipboard!'),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.copy, size: 16),
                   label: const Text('Copy backup to clipboard'),
                 ),
                 const Divider(height: 32),
-                const Text('Restore from Backup (Paste JSON):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const Text(
+                  'Restore from Backup (Paste JSON):',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: importController,

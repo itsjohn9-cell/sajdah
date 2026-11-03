@@ -11,7 +11,10 @@ See the [privacy policy](../web/privacy.html).
 |---|---|---|
 | Tasbeeh counts/settings and qaza balances | Local app storage; no Sijda server synchronization; platform backups may apply | App functionality; clearing local data removes local records |
 | Camera images and raw pose landmarks | Transient on-device processing; not saved or uploaded | Optional posture estimation; permission and explicit start |
+| Diagnostic camera video | Off by default; if explicitly enabled, kept in page memory until download or leaving; not uploaded | Optional local review |
 | Low-resolution lighting samples | On-device only; not saved/uploaded | Optional-camera preview warning |
+| Proximity, ambient light, accelerometer/gravity, orientation and gyroscope readings | Transient on-device processing during camera sessions; not saved or included in feedback | Optional prostration assistance, lighting guidance and detecting a moved phone; hardware/browser availability varies |
+| Microphone audio for voice tasbeeh | Captured only while the user starts voice counting; sent to the operating system/browser speech-recognition service; not recorded, saved or uploaded by Sajdah | Optional counting; provider processing may be on-device or remote under its own settings and terms |
 | Feedback count summaries, target, verdict and coarse posture timeline | Local copy; optionally sent to Firestore | App improvement; explicit upload consent; may reveal religious practices |
 | Placement, distance, lighting category, device/browser description, notes | Local copy; optionally sent to Firestore | Error investigation; avoid personal details in free text |
 | Report/session IDs, timestamps, algorithm version, interruptions/completion | Included in consented upload | Associate and interpret reports |
@@ -36,8 +39,13 @@ See the [privacy policy](../web/privacy.html).
   server delete operation. Verify any Console deletion-URL requirements.
 - Anonymous Auth records are not a user-facing login account. Verify how the
   current account-creation/deletion rules apply rather than asserting exemption.
+- Firestore rules validate feedback contents and ownership but do not rate-limit
+  write volume.
 - There is no ad SDK, advertising ID usage, location or contacts permission,
-  microphone recording, or app analytics SDK in the current implementation.
+  Sajdah-side microphone recording, or app analytics SDK in the current
+  implementation. Voice tasbeeh does use the microphone while explicitly
+  active; review the speech-recognition provider's handling and update Play
+  disclosures for the exact release.
 - Review platform backups, provider logging and web-host behavior before final
   answers. Do not promise zero metadata collection or immediate backup erasure.
 

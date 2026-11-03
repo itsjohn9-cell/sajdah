@@ -10,6 +10,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import android.view.View
 import android.webkit.PermissionRequest
@@ -25,12 +26,16 @@ import android.widget.Toast
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.sqrt
 
 class RakatCameraFactory(
     private val activity: MainActivity,
@@ -102,51 +107,96 @@ class RakatCameraView(
     private val sensorManager = activity.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
     private val proximitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_PROXIMITY)
     private val lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
+    private val gravitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GRAVITY)
+    private val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
     private inner class SensorBridge : SensorEventListener {
-        @Volatile private var latestProximity: Float = -1f
-        @Volatile private var latestLux: Float = -1f
+        private var active = false
+        private var latestProximity = -1f
+        private var latestLux = -1f
+        private var pitch = 0.0
+        private var roll = 0.0
+        private var acceleration = 0.0
+        private var rotationRate = 0.0
+        private var orientationTime = 0L
+        private var accelerationTime = 0L
+        private var gyroscopeTime = 0L
 
+        @Synchronized
         override fun onSensorChanged(event: SensorEvent?) {
-            when (event?.sensor?.type) {
+            if (!active || event == null) return
+            when (event.sensor.type) {
                 Sensor.TYPE_PROXIMITY -> latestProximity = event.values[0]
                 Sensor.TYPE_LIGHT -> latestLux = event.values[0]
+                Sensor.TYPE_GRAVITY, Sensor.TYPE_ACCELEROMETER -> {
+                    val x = event.values[0].toDouble()
+                    val y = event.values[1].toDouble()
+                    val z = event.values[2].toDouble()
+                    if (event.sensor.type == Sensor.TYPE_GRAVITY || gravitySensor == null) {
+                        pitch = Math.toDegrees(atan2(y, z))
+                        roll = Math.toDegrees(atan2(-x, sqrt(y * y + z * z)))
+                        orientationTime = event.timestamp
+                    }
+                    if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+                        acceleration = abs(sqrt(x * x + y * y + z * z) - SensorManager.GRAVITY_EARTH)
+                        accelerationTime = event.timestamp
+                    }
+                }
+                Sensor.TYPE_GYROSCOPE -> {
+                    rotationRate = sqrt(event.values.sumOf { it.toDouble() * it.toDouble() })
+                    gyroscopeTime = event.timestamp
+                }
             }
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
+        @Synchronized
         @JavascriptInterface
-        fun getProximity(): Float = latestProximity
+        fun setEnabled(enabled: Boolean): Boolean {
+            if (enabled && (disposed || !activity.cameraForeground)) return false
+            if (active == enabled) return true
+            sensorManager?.unregisterListener(this)
+            active = enabled
+            latestProximity = -1f
+            latestLux = -1f
+            orientationTime = 0L
+            accelerationTime = 0L
+            gyroscopeTime = 0L
+            if (enabled) {
+                listOfNotNull(proximitySensor, lightSensor, gravitySensor, accelerometer, gyroscope).forEach {
+                    if (sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) != true) {
+                        Log.w("SijdaSensors", "Could not register sensor type ${it.type}")
+                    }
+                }
+            }
+            return true
+        }
 
+        @Synchronized
         @JavascriptInterface
-        fun getLux(): Float = latestLux
-
-        @JavascriptInterface
-        fun hasProximity(): Boolean = proximitySensor != null
-
-        @JavascriptInterface
-        fun hasLightSensor(): Boolean = lightSensor != null
-
-        @JavascriptInterface
-        fun getProximityMaxRange(): Float = proximitySensor?.maximumRange ?: -1f
-
-        @JavascriptInterface
-        fun isNear(): Boolean {
-            val sensor = proximitySensor ?: return false
-            val value = latestProximity
-            if (value < 0f) return false
-            // On Android, binary or distance proximity reports maximumRange when FAR.
-            // Only report near when value is strictly less than maximumRange and < 3.5cm.
-            return value < sensor.maximumRange && value < 3.5f
+        fun getSnapshot(): String {
+            val now = SystemClock.elapsedRealtimeNanos()
+            fun fresh(timestamp: Long) = active && timestamp > 0L && now - timestamp in 0..1_000_000_000L
+            // Proximity and light are on-change sensors: unchanged readings remain valid until disabled.
+            return JSONObject()
+                .put("proximityAvailable", active && latestProximity >= 0f)
+                .put("proximityDistance", latestProximity.toDouble())
+                .put("proximityMaxRange", (proximitySensor?.maximumRange ?: -1f).toDouble())
+                .put("lightAvailable", active && latestLux >= 0f)
+                .put("lux", latestLux.toDouble())
+                .put("orientationAvailable", fresh(orientationTime))
+                .put("pitch", pitch).put("roll", roll)
+                .put("accelerationAvailable", fresh(accelerationTime)).put("acceleration", acceleration)
+                .put("gyroscopeAvailable", fresh(gyroscopeTime)).put("rotationRate", rotationRate)
+                .toString()
         }
     }
 
     private val sensorBridge = SensorBridge()
 
     init {
-        proximitySensor?.let { sensorManager?.registerListener(sensorBridge, it, SensorManager.SENSOR_DELAY_UI) }
-        lightSensor?.let { sensorManager?.registerListener(sensorBridge, it, SensorManager.SENSOR_DELAY_UI) }
         webView.setBackgroundColor(Color.rgb(248, 247, 242))
         webView.settings.apply {
             javaScriptEnabled = true
@@ -246,6 +296,7 @@ class RakatCameraView(
 
     fun stopCamera() {
         restoreBrightness()
+        sensorBridge.setEnabled(false)
         if (!disposed) {
             confirmation?.cancel()
             confirmation = null

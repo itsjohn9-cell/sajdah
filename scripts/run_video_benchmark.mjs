@@ -2,15 +2,16 @@
 import { performance } from "perf_hooks";
 import {
   RakatCounter,
-  classifyPose,
+  estimateFaceScale,
   selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
+import { PoseEvidence } from "../web/rakat/sensors.mjs";
 import { BENCHMARK_SCENARIOS } from "../test/fixtures/video_benchmark_scenarios.mjs";
 
 console.log("================================================================================");
 console.log("             🕋 SAJDAH COMPUTER VISION & POSE BENCHMARK SUITE                  ");
 console.log("================================================================================");
-console.log(`Total Benchmark Scenarios : ${BENCHMARK_SCENARIOS.length}`);
+console.log(`Synthetic scenarios       : ${BENCHMARK_SCENARIOS.length} (not camera recordings or field accuracy)`);
 console.log(`Placement Modes Tested    : Mat Floor (0°-15°), Propped (30°), Side (90°), Front Distance`);
 console.log(`Optical Conditions Tested : Screen Light, Tile Reflections, Flowing Cloth, Backlight`);
 console.log("================================================================================\n");
@@ -18,6 +19,7 @@ console.log("===================================================================
 let passed = 0;
 let failed = 0;
 let totalFrames = 0;
+let pauses = 0;
 const tStart = performance.now();
 
 console.log(
@@ -28,9 +30,13 @@ console.log(
 );
 
 for (const scenario of BENCHMARK_SCENARIOS) {
-  const isAdaptive = scenario.calibration?.mode !== "full";
-  const counter = new RakatCounter(scenario.targetRakats, { adaptive: isAdaptive });
+  const counter = new RakatCounter(scenario.targetRakats, { adaptive: true });
   const dataset = scenario.generate();
+  const evidence = new PoseEvidence();
+  const calibration = {
+    ...scenario.calibration,
+    faceScale: estimateFaceScale(selectPrimaryPose(dataset.frames[0].poses).pose),
+  };
   totalFrames += dataset.frames.length;
 
   let failedReason = null;
@@ -41,9 +47,10 @@ for (const scenario of BENCHMARK_SCENARIOS) {
       failedReason = `Multiple people falsely detected at ${frame.timeMs}ms`;
       break;
     }
-    const posture = classifyPose(pose, scenario.calibration, frame.context);
-    counter.observe(posture, frame.timeMs);
+    const signal = evidence.observe(pose, calibration, frame.context, frame.timeMs);
+    counter.observe(signal.posture, frame.timeMs, signal);
     if (counter.paused) {
+      pauses++;
       failedReason = `Paused at ${frame.timeMs}ms: ${counter.reason}`;
       break;
     }
@@ -79,11 +86,10 @@ const accuracyPct = ((passed / BENCHMARK_SCENARIOS.length) * 100).toFixed(1);
 console.log("\n================================================================================");
 console.log(`RESULTS SUMMARY: ${passed}/${BENCHMARK_SCENARIOS.length} Scenarios Passed (${accuracyPct}%)`);
 console.log(`Processed Frames : ${totalFrames} frames in ${totalTime}s`);
-console.log(`False Pauses     : 0`);
-console.log(`Overall Status   : ${failed === 0 ? "\x1b[32m✔ ALL BENCHMARKS PASSING (PRODUCTION READY)\x1b[0m" : "\x1b[31m✖ REGRESSIONS DETECTED\x1b[0m"}`);
+console.log(`Observed Pauses  : ${pauses} (not a measured field false-pause rate)`);
+console.log(`Overall Status   : ${failed === 0 ? "\x1b[32m✔ SYNTHETIC SCENARIOS PASS; DEVICE VALIDATION STILL REQUIRED\x1b[0m" : "\x1b[31m✖ REGRESSIONS DETECTED\x1b[0m"}`);
 console.log("================================================================================\n");
 
 if (failed > 0) {
   process.exit(1);
 }
-

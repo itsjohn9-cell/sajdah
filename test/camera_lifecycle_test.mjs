@@ -12,8 +12,10 @@ import {
   selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
 import { LightingMonitor } from "../web/rakat/lighting.mjs";
+import { PoseEvidence, readNativeSensors, deviceIsMoving, sensorOrientation } from "../web/rakat/sensors.mjs";
+import { buildSyntheticPose } from "./fixtures/video_benchmark_scenarios.mjs";
 
-async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false, completedRakat = 0 } = {}) {
+async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false, completedRakat = 0, nativeSensors = null } = {}) {
   const elements = new Map();
   const listeners = new Map();
   const tracks = [{ ended: false, stop() { this.ended = true; }, addEventListener() {} }];
@@ -26,6 +28,8 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   let samplingError = false;
   let samples = 0;
   let poseResults = [];
+  let now = 0;
+  const sensorRequests = [];
   const brightnessRequests = [];
   const classes = new Set();
   const canvas = {
@@ -48,7 +52,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
       value: "2", textContent: "", disabled: false, srcObject: null,
       readyState: 2, currentTime: 0,
       addEventListener(type, fn) { listeners.set(`${id}:${type}`, fn); },
-      replaceChildren() {},
+      replaceChildren(...children) { this.children = children; },
       setAttribute(name, value) { this[name] = value; },
       play: async () => {},
     });
@@ -69,6 +73,10 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   if (nativeLighting) window.SijdaLighting = {
     setEnabled(enabled) { brightnessRequests.push(enabled); return true; },
   };
+  if (nativeSensors) window.SijdaSensors = {
+    setEnabled(enabled) { sensorRequests.push(enabled); return true; },
+    getSnapshot() { return JSON.stringify(nativeSensors); },
+  };
   const context = vm.createContext({
     document, window, location: { origin: "https://sijda.test" },
     navigator: { mediaDevices: { getUserMedia: async () => {
@@ -76,6 +84,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
       return pendingCamera ? cameraPromise : stream;
     } } },
     crypto: { randomUUID: () => "test-session" }, confirm: () => true,
+    performance: { now: () => now },
     requestAnimationFrame: fn => { animation = fn; return 1; },
     cancelAnimationFrame: () => { animation = null; },
     console: { error() {} },
@@ -106,26 +115,51 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   const lightingModule = new vm.SyntheticModule(["LightingMonitor"], function () {
     this.setExport("LightingMonitor", LightingMonitor);
   }, { context });
+  const sensorsModule = new vm.SyntheticModule(
+    ["PoseEvidence", "readNativeSensors", "deviceIsMoving", "sensorOrientation"],
+    function () {
+      this.setExport("PoseEvidence", PoseEvidence);
+      this.setExport("readNativeSensors", readNativeSensors);
+      this.setExport("deviceIsMoving", deviceIsMoving);
+      this.setExport("sensorOrientation", sensorOrientation);
+    }, { context },
+  );
   const source = await readFile(new URL("../web/rakat/camera.mjs", import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, {
     context, importModuleDynamically: async () => mediaModule,
   });
-  await module.link(specifier => specifier === "./lighting.mjs" ? lightingModule : counterModule);
+  await module.link(specifier => specifier === "./lighting.mjs" ? lightingModule :
+    specifier === "./sensors.mjs" ? sensorsModule : counterModule);
   await module.evaluate();
   return {
-    element, tracks, detector, document, window, globalListeners, module, classes, brightnessRequests,
+    element, tracks, detector, document, window, globalListeners, module, classes, brightnessRequests, sensorRequests,
     setPixels: value => { pixelValue = value; },
     setPoses: value => { poseResults = value; },
     failSampling: () => { samplingError = true; },
     samples: () => samples,
     closed: () => closed,
     click: id => listeners.get(`${id}:click`)(),
+    change: id => listeners.get(`${id}:change`)(),
     resolveModel: () => resolveModel(detector),
     resolveCamera: () => resolveCamera(stream),
-    frame: time => animation?.(time),
+    frame: time => { now = time; animation?.(time); },
   };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test("diagnostic video is opt-in and privacy disclosures match", async () => {
+  const html = await readFile(new URL("../web/rakat/index.html", import.meta.url), "utf8");
+  const policy = await readFile(new URL("../web/privacy.html", import.meta.url), "utf8");
+  assert.match(html, /id="record-test-video"/);
+  assert.doesNotMatch(html, /id="record-test-video" checked/);
+  assert.match(html, /off by default/);
+  assert.match(html, /never uploaded/);
+  assert.match(policy, /Microphone and voice tasbeeh/);
+  assert.match(
+    policy.replace(/\s+/g, " "),
+    /Sajdah does not record, save or upload microphone audio/,
+  );
+});
 
 test("start, blank inference, stop and no automatic camera acquisition", async () => {
   const app = await harness();
@@ -139,7 +173,7 @@ test("start, blank inference, stop and no automatic camera acquisition", async (
   assert.match(app.element("session-state").textContent, /Setup in progress/);
   app.element("video").currentTime = 1;
   app.frame(100);
-  assert.match(app.element("status").textContent, /one full body/);
+  assert.match(app.element("status").textContent, /one person/);
   assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
   app.click("stop");
   assert.ok(app.tracks.every(track => track.ended));
@@ -251,7 +285,7 @@ test("multiple people cannot calibrate or advance a calibrated session", async (
     app.frame(time);
   }
   assert.match(app.element("session-state").textContent, /Setup in progress/);
-  assert.match(app.element("status").textContent, /one full body/);
+  assert.match(app.element("status").textContent, /one person/);
   app.setPoses([standingPose()]);
   for (let time = 1800; time <= 3400; time += 100) {
     app.element("video").currentTime++;
@@ -426,5 +460,202 @@ test("lighting sampler failure is explicit and does not terminate pose tracking"
   app.frame(100);
   assert.match(app.element("lighting-status").textContent, /check unavailable/);
   assert.ok(app.element("video").srcObject);
-  assert.match(app.element("status").textContent, /one full body/);
+  assert.match(app.element("status").textContent, /one person/);
+});
+
+const matPoses = {
+  standing: buildSyntheticPose({ headY: 0.22, shoulderY: 0.38, hipY: 0.60 }),
+  bow: buildSyntheticPose({ headY: 0.48, shoulderY: 0.50 }),
+  sitting: buildSyntheticPose({ headY: 0.40, shoulderY: 0.60 }),
+  sajdah: buildSyntheticPose({ headY: 0.72, shoulderY: 0.65 }),
+};
+
+function driver(app) {
+  let time = 0;
+  return {
+    hold(posture, duration = posture === "sajdah" ? 400 : 200) {
+      app.setPoses(posture === "unknown" ? [] : [matPoses[posture]]);
+      for (let elapsed = 0; elapsed <= duration; elapsed += 100) {
+        time += 100;
+        app.element("video").currentTime++;
+        app.frame(time);
+      }
+    },
+    multiple() {
+      app.setPoses([matPoses.standing, matPoses.standing]);
+      for (let i = 0; i < 16; i++) {
+        time += 100;
+        app.element("video").currentTime++;
+        app.frame(time);
+      }
+    },
+  };
+}
+
+async function matApp(options = {}) {
+  const app = await harness(options);
+  app.element("placement").value = "mat";
+  await app.click("start");
+  const drive = driver(app);
+  drive.hold("standing", 1900);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  return { app, drive };
+}
+
+test("live camera path counts fast 2/3/4-rakat sequences and exposes observed phase results", async () => {
+  for (const target of [2, 3, 4]) {
+    const app = await harness();
+    app.element("target").value = String(target);
+    app.change("target");
+    app.element("placement").value = "mat";
+    await app.click("start");
+    const drive = driver(app);
+    drive.hold("standing", 1900);
+    for (let rakat = 0; rakat < target; rakat++) {
+      for (const posture of ["standing", "bow", "standing", "sajdah", "sitting", "sajdah", "sitting"]) {
+        drive.hold(posture);
+      }
+    }
+    const result = app.module.namespace.getLocalDiagnostics();
+    assert.equal(result.rakats.length, target);
+    assert.ok(result.rakats.every(rakat => rakat.quality === "sequence-observed"));
+    assert.equal(app.module.namespace.feedbackSnapshot().algorithmVersion, "sensor-assisted-v3");
+    assert.match(app.element("history").children[0].textContent, /full sequence observed/);
+    assert.ok(app.tracks.every(track => track.ended));
+  }
+});
+
+test("native proximity supports long occlusion and fast release without falsely verifying unseen phases", async () => {
+  const sensors = { proximityAvailable: true, proximityDistance: 5, proximityMaxRange: 5, lightAvailable: true, lux: 8 };
+  const { app, drive } = await matApp({ nativeSensors: sensors });
+  assert.deepEqual(app.sensorRequests, [true]);
+  assert.match(app.element("sensor-status").textContent, /proximity, light/);
+  drive.hold("bow");
+  sensors.proximityDistance = 0;
+  drive.hold("unknown", 8000);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 1);
+  sensors.proximityDistance = 5;
+  drive.hold("unknown");
+  sensors.proximityDistance = 0;
+  drive.hold("unknown", 400);
+  sensors.proximityDistance = 5;
+  drive.hold("unknown");
+  const result = app.module.namespace.getLocalDiagnostics().rakats[0];
+  assert.ok(result);
+  assert.equal(result.quality, "sajdah-pair");
+  assert.equal(result.observed.ruku, true);
+  assert.equal(result.observed.qaumah, false);
+  assert.equal(result.observed.jalsah, false);
+  assert.ok(result.sources.includes("proximity"));
+  assert.match(app.element("history").children[0].textContent, /unverified: qaumah/);
+  app.click("stop");
+  assert.equal(app.sensorRequests.at(-1), false);
+});
+
+test("black camera frames during a low phase neither manufacture sajdah nor hide lost tracking", async () => {
+  const { app, drive } = await matApp();
+  drive.hold("sajdah");
+  app.setPixels(0);
+  drive.hold("unknown", 4200);
+  assert.match(app.element("status").textContent, /Body tracking lost/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 1);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
+  app.click("resume");
+  drive.hold("standing");
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+});
+
+test("Stop keeps second-sajdah partials without adding a completed estimate", async () => {
+  const { app, drive } = await matApp();
+  for (const posture of ["sajdah", "sitting", "sajdah"]) drive.hold(posture);
+  app.click("stop");
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 2);
+});
+
+test("phone acceleration, rotation or changed angle requires recalibration", async () => {
+  for (const change of [{ acceleration: 3 }, { rotationRate: 1 }, { pitch: 30 }, { roll: 30 }]) {
+    const sensors = {
+      orientationAvailable: true, pitch: 0, roll: 0,
+      accelerationAvailable: true, acceleration: 0, gyroscopeAvailable: true, rotationRate: 0,
+    };
+    const { app, drive } = await matApp({ nativeSensors: sensors });
+    Object.assign(sensors, change);
+    drive.hold("sajdah");
+    assert.match(app.element("status").textContent, /Phone moved/);
+    assert.equal(app.element("resume").disabled, true);
+    assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+    Object.assign(sensors, { pitch: 0, roll: 0, acceleration: 0, rotationRate: 0 });
+    app.click("calibrate");
+    drive.hold("standing", 1900);
+    assert.match(app.element("session-state").textContent, /Tracking active/);
+  }
+});
+
+test("multi-person pause automatically restarts partial state without stale timestamps", async () => {
+  const { app, drive } = await matApp({ completedRakat: 1 });
+  drive.hold("sajdah");
+  drive.multiple();
+  assert.match(app.element("session-state").textContent, /Tracking paused/);
+  drive.hold("standing", 2400);
+  drive.hold("standing");
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 1);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 2);
+});
+
+test("native sensors cannot calibrate or count without a working camera", async () => {
+  const sensors = { proximityAvailable: true, proximityDistance: 0, proximityMaxRange: 5 };
+  const app = await harness({ nativeSensors: sensors });
+  app.element("placement").value = "mat";
+  await app.click("start");
+  const drive = driver(app);
+  drive.hold("unknown", 5000);
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+  const denied = await harness({ nativeSensors: sensors, denied: true });
+  await denied.click("start");
+  assert.ok(!denied.sensorRequests.includes(true));
+});
+
+test("sensor bridge failures and motion permission denial stay visible with camera fallback", async () => {
+  const app = await harness({ nativeSensors: {} });
+  app.window.SijdaSensors.getSnapshot = () => { throw new Error("Bridge failed"); };
+  await app.click("start");
+  const drive = driver(app);
+  drive.hold("standing", 1900);
+  assert.match(app.element("sensor-status").textContent, /Native sensors unavailable/);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  const browser = await harness();
+  await browser.click("start");
+  browser.window.DeviceMotionEvent = { requestPermission: async () => "denied" };
+  await browser.click("enable-motion");
+  assert.match(browser.element("motion-status").textContent, /denied/);
+  assert.ok(browser.element("video").srcObject);
+});
+
+test("frozen camera cannot advance from proximity, and exit paths release native sensors", async () => {
+  for (const reason of ["frozen", "hidden", "pagehide", "feedback", "failure"]) {
+    const sensors = { proximityAvailable: true, proximityDistance: 5, proximityMaxRange: 5 };
+    const { app, drive } = await matApp({ nativeSensors: sensors });
+    drive.hold("bow");
+    sensors.proximityDistance = 0;
+    if (reason === "frozen") {
+      app.frame(5000);
+      assert.match(app.element("session-state").textContent, /Tracking paused/);
+      assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+      app.click("stop");
+    } else if (reason === "hidden") {
+      app.document.hidden = true;
+      app.globalListeners["document:visibilitychange"]();
+    } else if (reason === "pagehide") app.globalListeners["window:pagehide"]();
+    else if (reason === "feedback") app.module.namespace.stopForFeedback();
+    else {
+      app.detector.detectForVideo = () => { throw new Error("Inference failed"); };
+      drive.hold("unknown");
+    }
+    assert.equal(app.sensorRequests.at(-1), false, reason);
+    assert.ok(app.tracks.every(track => track.ended), reason);
+  }
 });

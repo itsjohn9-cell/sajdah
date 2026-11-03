@@ -277,12 +277,12 @@ void main() {
     },
   );
 
-  test('overlapping writes are rejected instead of losing updates', () async {
+  test('overlapping tasbeeh increments are ignored without losing updates', () async {
     final storage = MemoryStorage()..pending = Completer<void>();
     final store = SijdaStore(storage);
     final first = store.incrementTasbeeh();
     expect(store.saving, isTrue);
-    await expectLater(store.incrementTasbeeh(), throwsStateError);
+    expect(await store.incrementTasbeeh(), isFalse);
     storage.pending!.complete();
     await first;
     expect(store.guidedCount, 1);
@@ -326,4 +326,36 @@ void main() {
     expect(freshStore.balances['Fasts'], 5);
     expect(freshStore.guidedCount, 2);
   });
+
+  test(
+    'backup import validates versions and migrates legacy version one',
+    () async {
+      final store = SijdaStore(MemoryStorage());
+      final backup = jsonDecode(store.exportJson()) as Map<String, dynamic>;
+      final unsupported = {...backup, 'version': 4};
+      await expectLater(
+        store.importJson(jsonEncode(unsupported)),
+        throwsFormatException,
+      );
+
+      final invalidBeepSettings = {...backup, 'freeBeepMode': 'invalid'};
+      await expectLater(
+        store.importJson(jsonEncode(invalidBeepSettings)),
+        throwsFormatException,
+      );
+
+      final legacy = {...backup}
+        ..['version'] = 1
+        ..['target'] = 34
+        ..remove('guidedCount')
+        ..remove('mode')
+        ..remove('guidedBeep')
+        ..remove('freeBeepMode')
+        ..remove('freeBeepInterval');
+      expect(await store.importJson(jsonEncode(legacy)), isTrue);
+      expect(store.mode, TasbeehMode.free);
+      expect(store.guidedCount, 0);
+    },
+  );
+
 }

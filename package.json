@@ -2,8 +2,12 @@
   "name": "sijda-validation",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "scripts": {
     "test": "node --experimental-vm-modules --test test/*_test.mjs",
+    "lint": "eslint web/rakat --max-warnings=0",
     "benchmark": "node scripts/run_video_benchmark.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-sijda 'node --test test/firestore_rules.mjs'",
     "deploy": "node scripts/deploy_all.mjs",
@@ -16,9 +20,12 @@
     "publish:all": "node scripts/deploy_all.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "eslint": "^10.14.0",
     "firebase": "^12.19.0",
     "firebase-tools": "^15.34.1",
+    "globals": "^16.5.0",
     "googleapis": "^178.0.0"
   }
 }

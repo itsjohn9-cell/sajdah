@@ -26,6 +26,13 @@ const tester = () => environment.authenticatedContext("tester", {
 }).firestore();
 const next = () => `report-${number++}`;
 
+test("both legacy and sensor-assisted reports remain accepted", async () => {
+  for (const algorithmVersion of ["pose-heuristic-v2", "sensor-assisted-v3"]) {
+    const id = next();
+    await assertSucceeds(setDoc(doc(tester(), "feedback", id), { ...report(id), algorithmVersion }));
+  }
+});
+
 test("valid anonymous tester can create but cannot read, list, update or delete reports", async () => {
   const db = tester();
   const id = next();

@@ -33,6 +33,59 @@ camera tracks and model results; it never accesses a personal camera.
 
 ### Counter and pose classification cases
 
+The strict counter retains its 600 ms dwell / 1000 ms unknown filters. The live
+adaptive pipeline now uses 200 ms raised-posture and 400 ms sajdah filters, with
+a 4000 ms unsupported-unknown timeout in every phase. Regression coverage in
+`sensor_counting_test.mjs` and the real camera-module VM harness includes:
+
+- Fast 2/3/4-rakat sequences, including 200 ms ruku/qaumah/jalsah and 400 ms sajdah.
+- Exact 199/200 ms and 399/400 ms boundaries and short hand-sweep rejection.
+- Tracking blips within a single long sajdah never produce another entry.
+- Missing visual ruku/qaumah/jalsah produces a pair estimate, never full verification.
+- Camera-only and native proximity-supported occlusions; FAR release needs an
+  associated NEAR entry and must not contradict a continued visible sajdah.
+- No sensor-only calibration/counting, no counting from a frozen camera,
+  no inference from dark pixels, and no completion merely from Stop.
+- Sensor capability/invalid-reading handling, explicit bridge/permission failure,
+  accelerometer/gyro/angle-change recalibration and sensor shutdown on exit.
+- Manual and automatic multi-person restart clears stale timestamps/partial
+  detections and retains completed totals.
+- Shared, standing-calibrated face scale and consistent mat-mode selection.
+
+`npm run benchmark` now reuses the live fusion and adaptive counter on generated
+landmarks, counts observed pauses and explicitly disclaims production readiness.
+It still bypasses real camera/model recognition and is not an accuracy test.
+Two historical tutorial replays intentionally remain incomplete: one has no
+stable second-rakat separator, and one has only bow-like separator noise and a
+5.4-second unknown interval.
+The old permissive behavior counted through these gaps; regression tests now
+require an incomplete result/pause rather than fabricated completion. Some
+other tutorial tests still substitute posture labels during recitation cards;
+they are continuity tests, not live-recognition validation.
+
+Before releasing, collect consented, local-only flat-mat recordings with manually
+labeled movements and compare actual versus detected phases, pair counts,
+missed/extra sajdahs and pauses. Include fast/slow sequences, long prostration,
+short sitting, 2/3/4 targets, reflections, hand/cloth occlusions, low light and
+phones with missing sensors. Check native proximity on-change values remain
+usable during long holds, continuous motion samples expire when stale, and
+all sensor listeners stop with the camera. No physical-device accuracy is
+established by generated landmarks, tutorial replays or compilation.
+
+Deploy backward-compatible feedback rules to the existing project **before**
+distributing v3 clients. `npm run test:rules` verifies both algorithm versions
+in the demo emulator; no live writes are required.
+
+Browser smoke validation at 390px width: the real bundled model on a synthetic
+black camera stream stayed in setup with zero counts and a low-light warning.
+With controlled frame timestamps and mocked pose results, the browser completed
+two fast rakat estimates, labeled both full-sequence-observed, stopped camera
+tracks at target and had no horizontal overflow. The inactive browser tab
+throttled real timers to about 1 Hz, so controlled stepping was necessary; this
+is wiring validation, not camera recognition or real-time performance evidence.
+
+The following legacy table covers strict-order counter behavior:
+
 | Case | Expected result |
 |---|---|
 | Standard standing/ruku/standing/two-sajdah sequence | One estimated rakat only after leaving second sajdah |
@@ -103,7 +156,8 @@ screen light off/on at under 1 m, 1–2 m and over 2 m. Include light/dark cloth
 and each usable placement. Record expected versus detected counts, uncertain
 pauses, device/WebView version, lighting and screen-light state. Do not treat
 passing synthetic tests as recognition-accuracy evidence. Manual fallback is
-expected when the full body cannot be observed.
+expected when camera/sensor evidence cannot distinguish separate movements.
+Check that haptic vibration does not itself trigger the phone-moved safeguard.
 
 On Android, check brightness initially set to automatic, low manual and high
 manual settings. After opting in, verify restoration on manual Stop, target

@@ -127,7 +127,15 @@ class SijdaStore extends ChangeNotifier {
   Future<bool> importJson(String raw) async {
     final decoded = jsonDecode(raw);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid backup format: expected JSON object.');
+      throw const FormatException(
+        'Invalid backup format: expected JSON object.',
+      );
+    }
+    final version = decoded['version'];
+    if (decoded['app'] != 'Sajdah' ||
+        version is! int ||
+        ![1, 2, 3].contains(version)) {
+      throw const FormatException('Unsupported backup format or version.');
     }
     int number(Object? value, String name) {
       if (value is! int || value < 0 || value > 1000000) {
@@ -137,25 +145,48 @@ class SijdaStore extends ChangeNotifier {
     }
 
     final newTasbeeh = number(decoded['tasbeeh'], 'tasbeeh count');
-    final newGuided = number(decoded['guidedCount'], 'guided count');
-    if (newGuided > 100) {
-      throw const FormatException('Guided count cannot exceed 100.');
+    var newGuided = 0;
+    var newMode = TasbeehMode.free;
+    if (version == 1) {
+      if (![
+        33,
+        34,
+        100,
+      ].contains(number(decoded['target'], 'tasbeeh target'))) {
+        throw const FormatException('Invalid tasbeeh target in backup.');
+      }
+    } else {
+      newGuided = number(decoded['guidedCount'], 'guided count');
+      if (newGuided > 100) {
+        throw const FormatException('Guided count cannot exceed 100.');
+      }
+      final rawMode = decoded['mode'];
+      if (rawMode is! String ||
+          !TasbeehMode.values.any((mode) => mode.name == rawMode)) {
+        throw const FormatException('Invalid tasbeeh mode in backup.');
+      }
+      newMode = TasbeehMode.values.byName(rawMode);
     }
-    final rawMode = decoded['mode'] as String?;
-    if (rawMode == null || !TasbeehMode.values.any((m) => m.name == rawMode)) {
-      throw const FormatException('Invalid tasbeeh mode in backup.');
-    }
-    final newMode = TasbeehMode.values.byName(rawMode);
 
-    final newGuidedBeep = decoded['guidedBeep'] is bool ? decoded['guidedBeep'] as bool : true;
-    final rawFreeBeepMode = decoded['freeBeepMode'] as String?;
-    final newFreeBeepMode = rawFreeBeepMode != null && FreeBeepMode.values.any((m) => m.name == rawFreeBeepMode)
-        ? FreeBeepMode.values.byName(rawFreeBeepMode)
-        : FreeBeepMode.off;
-    final newInterval = decoded['freeBeepInterval'] != null
-        ? number(decoded['freeBeepInterval'], 'beep interval')
-        : 100;
-    if (newInterval < 1) throw const FormatException('Beep interval must be positive.');
+    var newGuidedBeep = true;
+    var newFreeBeepMode = FreeBeepMode.off;
+    var newInterval = 100;
+    if (version == 3) {
+      if (decoded['guidedBeep'] is! bool) {
+        throw const FormatException('Invalid guided beep setting in backup.');
+      }
+      newGuidedBeep = decoded['guidedBeep'] as bool;
+      final rawFreeBeepMode = decoded['freeBeepMode'];
+      if (rawFreeBeepMode is! String ||
+          !FreeBeepMode.values.any((mode) => mode.name == rawFreeBeepMode)) {
+        throw const FormatException('Invalid free beep setting in backup.');
+      }
+      newFreeBeepMode = FreeBeepMode.values.byName(rawFreeBeepMode);
+      newInterval = number(decoded['freeBeepInterval'], 'beep interval');
+    }
+    if (newInterval < 1) {
+      throw const FormatException('Beep interval must be positive.');
+    }
 
     final balances = decoded['balances'];
     if (balances is! Map<String, dynamic>) {
@@ -181,7 +212,7 @@ class SijdaStore extends ChangeNotifier {
       prayerNames.fold(0, (total, name) => total + _balances[name]!);
 
   Future<bool> incrementTasbeeh() async {
-    if (mode == TasbeehMode.guided && guidedComplete) return false;
+    if (saving || (mode == TasbeehMode.guided && guidedComplete)) return false;
     final next = activeCount + 1;
     final shouldBeep = mode == TasbeehMode.guided
         ? guidedBeep && [34, 67, 100].contains(next)

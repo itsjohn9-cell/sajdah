@@ -9,7 +9,7 @@ import {
   selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
 
-test("Replay real YouTube Fajr Men Beginners video (YhgSe6DFK-0): counts 2 Rakats, 4 Sajdahs and completes", () => {
+test("Tutorial landmark replay with missing second jalsah cannot fabricate a completed target", () => {
   const fixturePath = path.resolve("test/fixtures/fajr_men_beginners_landmarks.json");
   assert.ok(fs.existsSync(fixturePath), "Fixture fajr_men_beginners_landmarks.json must exist");
 
@@ -48,11 +48,11 @@ test("Replay real YouTube Fajr Men Beginners video (YhgSe6DFK-0): counts 2 Rakat
     if (counter.complete) break;
   }
 
-  // 4. Assert end-to-end success
-  assert.equal(counter.rakats.length, 2, "Must complete exactly 2 Rakats");
+  // The second separator has only isolated bow frames separated by unknown tracking.
+  // Title-card substitutions above are not camera observations or accuracy evidence.
+  assert.equal(counter.rakats.length, 1);
   assert.equal(counter.rakats[0].sajdahs, 2, "Rakat 1 must contain 2 Sajdahs");
-  assert.equal(counter.rakats[1].sajdahs, 2, "Rakat 2 must contain 2 Sajdahs");
-  assert.equal(counter.complete, true, "Prayer session must be marked complete");
-  assert.equal(counter.paused, false, "Counter must not pause during valid prayer");
+  assert.equal(counter.complete, false);
+  assert.equal(counter.paused, true);
+  assert.match(counter.reason, /Body tracking lost/);
 });
-

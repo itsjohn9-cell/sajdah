@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
@@ -19,20 +19,7 @@ if (!versionMatch) {
 const versionName = versionMatch[1];
 const versionCode = versionMatch[2] || '1';
 
-const flutterCandidates = [
-  process.env.FLUTTER_BIN,
-  '/Users/mohammadjhone/Projects/flutter-sdk/bin/flutter',
-  path.resolve(process.env.HOME || '', 'Projects/flutter-sdk/bin/flutter'),
-  'flutter'
-].filter(Boolean);
-
-let flutterBin = 'flutter';
-for (const cand of flutterCandidates) {
-  if (fs.existsSync(cand)) {
-    flutterBin = cand;
-    break;
-  }
-}
+const flutterBin = process.env.FLUTTER_BIN || 'flutter';
 
 console.log('========================================================');
 console.log('       🚀 SAJDAH ONE-CLICK UNIFIED DEPLOYMENT           ');
@@ -42,11 +29,26 @@ console.log(`🔨 Flutter Binary : ${flutterBin}`);
 console.log('========================================================\n');
 
 try {
+  const status = execFileSync('git', ['status', '--porcelain'], {
+    encoding: 'utf8',
+  }).trim();
+  if (status) {
+    throw new Error(
+      'Release deployment requires a clean working tree. Commit or stash changes first.',
+    );
+  }
+  const branch = execFileSync('git', ['branch', '--show-current'], {
+    encoding: 'utf8',
+  }).trim();
+  if (branch !== 'main') {
+    throw new Error(`Release deployment must run from main; current branch is ${branch || '(detached)'}.`);
+  }
+
   // Step 1: Run Tests
   if (!skipTests) {
     console.log('🧪 [1/5] Running automated Node & Flutter regression tests...');
-    execSync('npm test', { stdio: 'inherit' });
-    execSync(`${flutterBin} test`, { stdio: 'inherit' });
+    execFileSync('npm', ['test'], { stdio: 'inherit' });
+    execFileSync(flutterBin, ['test'], { stdio: 'inherit' });
     console.log('✔ All tests passed successfully!\n');
   } else {
     console.log('⏩ [1/5] Skipping tests (--skip-tests passed)...\n');
@@ -56,38 +58,42 @@ try {
   if (!skipBuild) {
     console.log('🔨 [2/5] Building Release App Bundle (AAB) & APK...');
     console.log('   -> Building AAB...');
-    execSync(`${flutterBin} build appbundle --release --build-name=${versionName} --build-number=${versionCode}`, { stdio: 'inherit' });
+    execFileSync(
+      flutterBin,
+      ['build', 'appbundle', '--release', `--build-name=${versionName}`, `--build-number=${versionCode}`],
+      { stdio: 'inherit' },
+    );
     console.log('   -> Building APK...');
-    execSync(`${flutterBin} build apk --release --build-name=${versionName} --build-number=${versionCode}`, { stdio: 'inherit' });
+    execFileSync(
+      flutterBin,
+      ['build', 'apk', '--release', `--build-name=${versionName}`, `--build-number=${versionCode}`],
+      { stdio: 'inherit' },
+    );
+    console.log('   -> Building ABI-specific APKs...');
+    execFileSync(
+      flutterBin,
+      ['build', 'apk', '--release', '--split-per-abi', `--build-name=${versionName}`, `--build-number=${versionCode}`],
+      { stdio: 'inherit' },
+    );
     console.log('✔ Builds complete!\n');
   } else {
     console.log('⏩ [2/5] Skipping build step (--skip-build passed)...\n');
   }
 
-  // Step 3: Git Commit & Push to GitHub main branch
+  // Step 3: Push only already-committed source; never stage or create commits here.
   console.log('🌿 [3/5] Synchronizing latest project updates to GitHub main branch...');
-  try {
-    const status = execSync('git status --porcelain').toString().trim();
-    if (status) {
-      console.log('   -> Staging and committing pending project changes...');
-      execSync('git add -A', { stdio: 'inherit' });
-      execSync(`git commit -m "release: Sajdah v${versionName} (Build ${versionCode})"`, { stdio: 'inherit' });
-    }
-    console.log('   -> Pushing to origin main...');
-    execSync('git push origin main', { stdio: 'inherit' });
-    console.log('✔ GitHub main branch is completely up to date!\n');
-  } catch (gitErr) {
-    console.warn('⚠️ Git push to main warning:', gitErr.message);
-  }
+  console.log('   -> Pushing committed changes to origin/main...');
+  execFileSync('git', ['push', 'origin', 'main'], { stdio: 'inherit' });
+  console.log('✔ GitHub main branch is completely up to date!\n');
 
   // Step 4: Google Play Console Release
   console.log('📱 [4/5] Uploading & Publishing to Google Play Console...');
-  execSync('node scripts/publish_play_console.mjs', { stdio: 'inherit' });
+  execFileSync('node', ['scripts/publish_play_console.mjs'], { stdio: 'inherit' });
   console.log('✔ Published to Google Play!\n');
 
   // Step 5: GitHub Releases Upload
   console.log('🐙 [5/5] Uploading APK to GitHub Releases...');
-  execSync('node scripts/publish_github_release.mjs', { stdio: 'inherit' });
+  execFileSync('node', ['scripts/publish_github_release.mjs'], { stdio: 'inherit' });
   console.log('✔ Uploaded APKs to GitHub Releases!\n');
 
   console.log('========================================================');

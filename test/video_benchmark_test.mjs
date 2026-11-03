@@ -2,19 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   RakatCounter,
-  classifyPose,
+  estimateFaceScale,
   selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
+import { PoseEvidence } from "../web/rakat/sensors.mjs";
 import { BENCHMARK_SCENARIOS } from "./fixtures/video_benchmark_scenarios.mjs";
 
-test("Video Benchmark Suite: Evaluation across 10 multi-angle, optical & placement scenarios", async (t) => {
+test("Synthetic landmark scenarios: sensor fusion and live adaptive counter", async (t) => {
   const results = [];
 
   for (const scenario of BENCHMARK_SCENARIOS) {
     await t.test(`${scenario.id}: ${scenario.name} [${scenario.category}]`, () => {
-      const isAdaptive = scenario.calibration?.mode !== "full";
-      const counter = new RakatCounter(scenario.targetRakats, { adaptive: isAdaptive });
+      const counter = new RakatCounter(scenario.targetRakats, { adaptive: true });
       const dataset = scenario.generate();
+      const evidence = new PoseEvidence();
+      const calibration = {
+        ...scenario.calibration,
+        faceScale: estimateFaceScale(selectPrimaryPose(dataset.frames[0].poses).pose),
+      };
 
       let postureTransitions = 0;
       let lastPosture = null;
@@ -30,14 +35,15 @@ test("Video Benchmark Suite: Evaluation across 10 multi-angle, optical & placeme
         );
 
         // 2. Posture classification across placement modes
-        const posture = classifyPose(pose, scenario.calibration, frame.context);
+        const signal = evidence.observe(pose, calibration, frame.context, frame.timeMs);
+        const { posture } = signal;
         if (posture !== lastPosture) {
           postureTransitions++;
           lastPosture = posture;
         }
 
         // 3. Counter observation and progression
-        counter.observe(posture, frame.timeMs);
+        counter.observe(posture, frame.timeMs, signal);
 
         // Invariant: No false pauses
         assert.equal(
@@ -74,4 +80,3 @@ test("Video Benchmark Suite: Evaluation across 10 multi-angle, optical & placeme
   assert.equal(results.length, BENCHMARK_SCENARIOS.length);
   assert.ok(results.every(r => r.passed));
 });
-

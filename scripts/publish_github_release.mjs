@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 const pubspecPath = path.resolve('pubspec.yaml');
 const pubspecContent = fs.readFileSync(pubspecPath, 'utf8');
@@ -23,50 +23,84 @@ if (!fs.existsSync(apkSource)) {
   process.exit(1);
 }
 
+const splitSources = new Map(
+  ['arm64-v8a', 'armeabi-v7a', 'x86_64'].flatMap(abi => {
+    const source = path.join(apkDir, `app-${abi}-release.apk`);
+    return fs.existsSync(source) ? [[abi, source]] : [];
+  }),
+);
+const defaultApkSource = splitSources.get('arm64-v8a') || apkSource;
 const sajdahReleaseApk = path.join(apkDir, 'sajdah-release.apk');
 const sajdahVersionedApk = path.join(apkDir, `sajdah-${tag}.apk`);
+const universalReleaseApk = path.join(apkDir, 'sajdah-universal-release.apk');
+const universalVersionedApk = path.join(apkDir, `sajdah-universal-${tag}.apk`);
 const legacySijdaApk = path.join(apkDir, 'sijda-release.apk');
 
-fs.copyFileSync(apkSource, sajdahReleaseApk);
-fs.copyFileSync(apkSource, sajdahVersionedApk);
+fs.copyFileSync(defaultApkSource, sajdahReleaseApk);
+fs.copyFileSync(defaultApkSource, sajdahVersionedApk);
+fs.copyFileSync(apkSource, universalReleaseApk);
+fs.copyFileSync(apkSource, universalVersionedApk);
 fs.copyFileSync(apkSource, legacySijdaApk);
+const splitAssets = [];
+for (const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
+  const splitSource = splitSources.get(abi);
+  if (!splitSource) continue;
+  const splitAsset = path.join(apkDir, `sajdah-${tag}-${abi}.apk`);
+  fs.copyFileSync(splitSource, splitAsset);
+  splitAssets.push(splitAsset);
+}
 
 console.log('====================================================');
 console.log('       SAJDAH - GITHUB RELEASES AUTO-PUBLISHER      ');
 console.log('====================================================');
 console.log(`📦 Tag Name     : ${tag}`);
 console.log(`🔢 Version Name : ${versionName} (Build ${versionCode})`);
-console.log(`📁 Source APK   : ${apkSource}`);
+console.log(`📁 Default APK  : ${defaultApkSource}`);
+console.log(`📁 Universal APK: ${apkSource}`);
 
 try {
   // Check if release already exists
   let exists = false;
   try {
-    execSync(`gh release view ${tag}`, { stdio: 'ignore' });
+    execFileSync('gh', ['release', 'view', tag], { stdio: 'ignore' });
     exists = true;
   } catch (_) {
     exists = false;
   }
 
-  const assets = `"${sajdahReleaseApk}" "${sajdahVersionedApk}" "${legacySijdaApk}"`;
+  const assets = [sajdahReleaseApk, sajdahVersionedApk, legacySijdaApk, ...splitAssets];
+  assets.push(universalReleaseApk, universalVersionedApk);
 
   if (exists) {
     console.log(`ℹ Release ${tag} exists. Uploading/overwriting assets...`);
-    execSync(`gh release upload ${tag} ${assets} --clobber`, { stdio: 'inherit' });
+    execFileSync('gh', ['release', 'upload', tag, ...assets, '--clobber'], { stdio: 'inherit' });
   } else {
     console.log(`🚀 Creating GitHub Release ${tag}...`);
+    const splitLinks = splitAssets.map(asset => {
+      const name = path.basename(asset);
+      return `- [${name}](https://github.com/itsjohn9-cell/sajdah/releases/download/${tag}/${name})`;
+    }).join('\n');
     const notes = `### Sajdah ${tag} (Build ${versionCode})
 - Automated Release with signed Android APK assets.
-- Modernized Islamic theme, streamlined prostration detection & prayer progression flow.
+- Experimental camera-required counting with available proximity, light, orientation, accelerometer and gyroscope assistance.
+- Short recognition filters (200 ms raised posture; 400 ms sajdah), distinct sajdah release detection, and corrected restart handling.
+- Results distinguish visually observed sequences from pair-based estimates and list unverified phases.
+- Privacy/permission, backup-validation and concurrent-save safeguards.
+- **Real-phone flat-mat counting accuracy is not yet verified. Review estimates and use manual counting when uncertain.**
+- The default download is the smaller arm64 APK when available; other ABI-specific builds are listed below.
 
 ### Direct Download Links:
 - **[Download Latest Sajdah APK (Direct Link)](https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk)**
 - **[Download Sajdah ${tag} APK](https://github.com/itsjohn9-cell/sajdah/releases/download/${tag}/sajdah-${tag}.apk)**
+- [Download universal APK](https://github.com/itsjohn9-cell/sajdah/releases/download/${tag}/sajdah-universal-${tag}.apk)
+- ABI-specific APKs (smaller downloads):
+${splitLinks || '- Not available for this release.'}
 - *(Legacy download link: [sijda-release.apk](https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sijda-release.apk))*`;
 
-    execSync(
-      `gh release create ${tag} ${assets} --title "Sajdah ${tag} (Build ${versionCode})" --notes "${notes}" --latest`,
-      { stdio: 'inherit' }
+    execFileSync(
+      'gh',
+      ['release', 'create', tag, ...assets, '--target', 'main', '--title', `Sajdah ${tag} (Build ${versionCode}) - Experimental counting`, '--notes', notes, '--latest'],
+      { stdio: 'inherit' },
     );
   }
 

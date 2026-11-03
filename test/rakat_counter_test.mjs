@@ -297,16 +297,15 @@ test("upper-body landmarks calibrate and classify when lower legs are out of fra
   assert.equal(classifyPose(sajdah, upperCal), "sajdah");
 });
 
-test("mat mode detects sajdah via proximity and optical occlusion", () => {
+test("vision classifier does not infer a posture from sensor or coverage flags", () => {
   const matCal = { mode: "mat", orientation: "flat" };
 
-  // Hardware proximity sensor triggered (forehead within 5cm)
-  assert.equal(classifyPose(null, matCal, { proximity: true }), "sajdah");
-  assert.equal(classifyPose(null, matCal, { proximityDistance: 2.0 }), "sajdah");
+  assert.equal(classifyPose(null, matCal, { proximity: true }), "unknown");
+  assert.equal(classifyPose(null, matCal, { proximityDistance: 2.0 }), "unknown");
 
   // Optical proximity triggered (face/head covering camera)
-  assert.equal(classifyPose(null, matCal, { opticalProximity: true }), "sajdah");
-  assert.equal(classifyPose(null, matCal, { isCovered: true }), "sajdah");
+  assert.equal(classifyPose(null, matCal, { opticalProximity: true }), "unknown");
+  assert.equal(classifyPose(null, matCal, { isCovered: true }), "unknown");
 
   // When not prostrating, standing or sitting detected
   const sittingPoints = points({ head: 0.4, shoulder: 0.6 });
@@ -338,7 +337,7 @@ test("diagnosePlacement provides actionable guidance for extreme conditions", ()
   // Mat mode guidance when tracking lost
   const diagMat = diagnosePlacement({ orientation: "flat", timeSinceLastDetection: 2000 });
   assert.equal(diagMat.code, "mat_mode_guide");
-  assert.match(diagMat.fix, /prostration spot/);
+  assert.match(diagMat.fix, /beside the prostration area/);
 
   // Head cut off
   const cutOffPoints = points();

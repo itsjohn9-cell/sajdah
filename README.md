@@ -2,6 +2,7 @@
 
 An offline-first Islamic companion built with Flutter for Android, iOS, and web, featuring prostration detection, prayer progression tracking, Tasbeeh counter, and Qaza records.
 Direct APK Download: [Download Latest Sajdah APK](https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk)
+Web app: [Open Sajdah](https://itsjohn9-cell.github.io/sajdah/)
 
 ## Working now
 
@@ -118,13 +119,40 @@ an allowlisted resource loader and lifecycle teardown. No microphone permission
 is requested. Android 7+ and a recent WebView are needed; physical-device
 compatibility is not yet verified. Native iOS still shows manual fallback.
 
-Stand upright and keep still for calibration. The camera must see one person
-with head, shoulders, hips, knees and ankles visible, including during floor
-postures. Position is flexible within those constraints, not arbitrary.
-The heuristic uses normalized landmarks and a calibrated body height rather
-than a fixed distance. It is not a trained prayer-posture classifier and cannot
-guarantee accuracy from low/tilted views, loose clothing, occlusions, seated
-prayer, all lighting conditions or all hardware.
+Choose **Flat on mat** (default) or **Propped / automatic**, then stand upright
+and keep the phone still for calibration. Place a flat phone beside the
+prostration area, never under the forehead. Flat-mat calibration accepts a
+visible head and shoulders and learns standing face scale; full-body/side views
+use their existing geometry. Calibration and inference use the same mode and
+face-scale estimator. This remains a heuristic, not a trained prayer-posture
+classifier or a guarantee of accuracy.
+
+The sensor-assisted v3 pipeline requires running camera frames and a calibrated
+visible person. Available Android proximity can support occluded prostrations
+after recent visual evidence; a supported NEAR/FAR/NEAR cycle can separate them.
+Proximity alone cannot identify the nearby object or verify sitting, qiyam or
+ruku. Without usable proximity, camera evidence is required for the release.
+Optical close-ups require visible, confident face landmarks; darkness and
+missing people never imply a posture. Ambient light gives guidance only.
+Accelerometer, gravity/orientation and gyroscope readings detect a moved phone
+and require recalibration, not body movements. Native sensors run only while
+the camera session runs. Browser motion access is optional and device-dependent;
+denied or unavailable sensors leave camera-only tracking available.
+
+Short recognition filters accept raised postures held for 200 ms and sajdah
+for 400 ms. These are engineering noise filters, not prayer-duration rules.
+Shorter movements may be missed; unknown frames and elapsed time alone never
+separate two sajdahs. Four seconds of unsupported tracking loss pauses even
+during low phases. A supported held prostration has no duration limit.
+Restart clears partial detections and timing while retaining completed
+estimates. Stop never completes an unfinished cycle.
+
+Per-rakat results distinguish **full sequence observed** from **pair-based
+estimate**, listing visually unverified phases and prostration evidence sources.
+This does not determine prayer validity. Sensor readings and detailed per-phase
+results are transient and stay local; optional feedback still contains only
+count summaries and coarse transitions. Real flat-mat recognition, fast prayer,
+clothing, seated prayer and device compatibility still need physical testing.
 
 ### Low-light assistance
 
@@ -194,6 +222,13 @@ updates, deletes, unauthenticated writes and sample uploads are denied.
 The public Firebase API key in the client is configuration, not an admin secret.
 Rules are in [firestore.rules](firestore.rules).
 
+Before distributing sensor-assisted v3 clients, deploy the backward-compatible
+rules to the **existing** project: `firebase deploy --only firestore:rules --project sijda-testing-20261027`.
+The updated rules accept both `pose-heuristic-v2` and `sensor-assisted-v3`;
+existing clients remain supported. No new project, App Check setup, feedback
+fields or sensor uploads are required. Repository changes/builds do not deploy
+these rules automatically; v3 uploads will be rejected until rules are deployed.
+
 Live integration checks confirmed authorized create and rejected unauthorized
 writes/reads/sample submissions. All integration-test records/users were removed.
 The report contains count summaries and at most 500 coarse transition entries,
@@ -226,6 +261,13 @@ Anonymous authentication alone is not public anti-abuse protection. App Check
 or authenticated tester-only access is a gate before wider distribution.
 
 ## Android signing and Play status
+
+The Pages workflow now builds and publishes the complete Flutter web app,
+including local camera/model assets, while preserving `/sajdah/privacy.html`.
+It validates the app and camera before publishing and downloads the pinned
+pose model with checksum verification. Android releases use the existing
+closed-testing (`alpha`) Play track. Sensor-assisted v3 remains experimental:
+publication does not establish real-phone counting accuracy.
 
 Package ID: `app.sijda.sijda` (confirmed by the owner). Dedicated upload signing
 files are outside the repository at `~/.config/sijda/`; back up that directory

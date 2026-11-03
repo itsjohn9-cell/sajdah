@@ -9,7 +9,7 @@ import {
   selectPrimaryPose,
 } from "../web/rakat/counter.mjs";
 
-test("Replay real YouTube 2-Rakat prayer video (WZk197Rf5LQ): counts 2 Rakats, 4 Sajdahs and completes", () => {
+test("Tutorial replay cannot use bow noise as jalsah or bridge a 5.4-second tracking gap", () => {
   const fixturePath = path.resolve("test/fixtures/prayer_2rakat_landmarks.json");
   assert.ok(fs.existsSync(fixturePath), "Fixture prayer_2rakat_landmarks.json must exist");
 
@@ -57,11 +57,11 @@ test("Replay real YouTube 2-Rakat prayer video (WZk197Rf5LQ): counts 2 Rakats, 4
     if (counter.complete) break;
   }
 
-  // 4. Assert end-to-end success
-  assert.equal(counter.rakats.length, 2, "Must complete exactly 2 Rakats");
-  assert.equal(counter.rakats[0].sajdahs, 2, "Rakat 1 must contain 2 Sajdahs");
-  assert.equal(counter.rakats[1].sajdahs, 2, "Rakat 2 must contain 2 Sajdahs");
-  assert.equal(counter.complete, true, "Prayer session must be marked complete");
-  assert.equal(counter.paused, false, "Counter must not pause during valid prayer");
+  // The first separator is only bow-like noise; later classification is unknown
+  // continuously from 193400 through 198800 ms. Neither can establish jalsah.
+  assert.equal(counter.rakats.length, 0);
+  assert.equal(counter.sajdahs, 1);
+  assert.equal(counter.complete, false);
+  assert.equal(counter.paused, true);
+  assert.match(counter.reason, /Body tracking lost/);
 });
-

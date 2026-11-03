@@ -112,9 +112,13 @@
   <summary>Setup, limitations and privacy</summary>
   <p><a href="https://itsjohn9-cell.github.io/sajdah/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
     · Privacy/deletion: fehmatics@gmail.com</p>
-  <p class="setup-info">Keep this page open with the screen on. Position the front camera so your
-    head, hips, knees and feet stay visible, including on the floor.
-    No exact distance is required, but a very low or tilted view may not work.</p>
+  <p class="setup-info">Keep this page open with the screen on. For flat-mat placement,
+    put the phone beside the prostration area with the front camera facing up, never under your forehead.
+    Check that standing, sitting and prostration produce different views. A propped view works too.
+    The camera is required; optional sensors assist but cannot confirm unseen prayer movements.</p>
+  <p>Fast movements are supported with short recognition windows: about 200 ms for raised
+    postures and 400 ms for sajdah. Shorter or obscured movements may be missed. These
+    are noise filters, not instructions about prayer timing. Unknown frames never count as a release.</p>
   <p class="warning">Estimates only. Not validated for prayer use or all phones,
     clothing or mobility needs. Only standard standing sequences are supported.
     Review results; this does not determine prayer validity.</p>
@@ -122,24 +126,35 @@
   <div class="controls">
     <label for="target">Session target</label>
     <select id="target"><option value="2">2 rakat</option><option value="3">3 rakat</option><option value="4">4 rakat</option></select>
+    <label for="placement">Camera placement</label>
+    <select id="placement"><option value="mat">Flat on mat</option><option value="auto">Propped / automatic</option></select>
     <button id="start" class="primary">Enable front camera</button>
     <button id="stop" disabled>Stop camera</button>
     <button id="done-review" class="primary">Done / Review session</button>
   </div>
   <label class="consent" style="margin: 6px 0 12px 0; font-size: 0.9rem;">
-    <input type="checkbox" id="record-test-video" checked>
-    Record test video on device (optional, for diagnostic download & review)
+    <input type="checkbox" id="record-test-video" aria-describedby="diagnostic-video-privacy">
+    Record a diagnostic video locally (optional; off by default)
   </label>
+  <p id="diagnostic-video-privacy">If enabled, a temporary video stays in this page until you download it or leave.
+    Sajdah never uploads this recording, and it is not included in feedback.</p>
   <div class="preview">
     <p id="camera-placeholder">Camera off. Tap Enable front camera to begin setup.</p>
     <video id="video" hidden playsinline muted disablepictureinpicture aria-label="Mirrored front camera preview"></video>
   </div>
   <h2>Session results</h2>
+  <p id="sensor-status" role="status">Sensors off. Camera is required for counting.</p>
+  <p id="evidence-status">No posture evidence yet.</p>
   <ol id="history" aria-label="Estimated rakat history"></ol>
+  <p>Full sequence observed means all phases were recognized by the camera, not confirmation of prayer validity.
+    Pair-based estimates list phases that were not visually verified. Stopping never completes a partial rakat.</p>
   <p>Review these estimates before leaving this screen. Leaving clears the automatic session.</p>
   <div class="controls">
+    <button id="enable-motion" disabled>Enable optional motion sensors</button>
     <button id="screen-light" aria-pressed="false" disabled>Turn screen light on</button>
   </div>
+  <p id="motion-status">Motion/orientation sensors detect a moved phone, not body movements.
+    Availability varies by device and browser; denying access does not prevent camera tracking.</p>
   <p id="screen-light-status" role="status">Screen light off. This can help nearby, but cannot guarantee tracking in darkness. Uses extra battery.</p>
   <p id="lighting-status" class="warning" role="status">Lighting check off. Camera frames are sampled only on-device while tracking.</p>
   <div class="controls">
@@ -150,7 +165,7 @@
   </div>
   <section id="quick-review" class="preview" style="background: white; border: 2px solid #176b58; padding: 14px; margin: 12px 0;" hidden>
     <h2 style="color: #174e40; margin-bottom: 6px;">Test Session Review</h2>
-    <p id="review-comparison" style="font-size: 1.1rem; font-weight: 600; margin: 4px 0;">Sijda detected: 0 rakat(s).</p>
+    <p id="review-comparison" style="font-size: 1.1rem; font-weight: 600; margin: 4px 0;">Sajdah detected: 0 rakat(s).</p>
     <div style="margin: 12px 0;">
       <p style="margin: 4px 0;"><strong>How many rakats did you actually pray?</strong></p>
       <div class="controls" id="rakat-picker">
@@ -180,7 +195,9 @@
   <p class="setup-info">Start standing for calibration. The tracker then expects standing → ruku →
     standing → sajdah → sitting → sajdah → sitting/standing.
     A rakat estimate is added only after leaving the second sajdah.</p>
-  <p>Camera frames stay on your device: no recording or uploading. The bundled
+  <p>Pose detection processes camera frames locally. Diagnostic video recording
+    is off by default; if enabled, it stays in this page unless you download it
+    and is never uploaded. Images are not included in feedback. The bundled
     pose model loads from this app (about 26 MB with runtime files). HTTPS is
     required on phones. Camera stops on Stop, leaving this screen, or hiding the
     page. Sessions are not saved and do not change qaza balances. Motion sensors
@@ -201,7 +218,7 @@
       <label>Actual rakat you completed <input name="expectedRakat" type="number" min="0" max="100" step="1" required></label>
       <label>Actual sajdahs you completed <input name="expectedSajdahs" type="number" min="0" max="200" step="1" required></label>
       <label>Mobile placement
-        <select name="placement"><option value="floor-tilted">On floor, tilted upright</option><option value="low-stand">Low phone stand</option><option value="chair">Chair height</option><option value="shelf">Shelf/table</option><option value="other">Other (describe below)</option></select>
+        <select name="placement">        <option value="floor-tilted">On floor (flat mat or tilted)</option><option value="low-stand">Low phone stand</option><option value="chair">Chair height</option><option value="shelf">Shelf/table</option><option value="other">Other (describe below)</option></select>
       </label>
       <label>Approximate distance
         <select name="distance"><option value="unknown">Not sure</option><option value="under-1m">Under 1 metre</option><option value="1-2m">1–2 metres</option><option value="over-2m">Over 2 metres</option></select>
@@ -211,7 +228,7 @@
       <label>What happened? Include whether screen light was on or off.
         <textarea name="notes" rows="3" maxlength="1000" placeholder="Screen light on/off, room lighting, camera tilt, clothing, missing/double counts, which posture was missed..."></textarea></label>
       <label class="consent"><input name="consent" type="checkbox">
-        I consent to uploading this report, device/browser information and the posture-transition log to Sijda's Firebase testing backend for improving detection. No camera images are sent.</label>
+        I consent to uploading this report, device/browser information and the posture-transition log to Sajdah's Firebase testing backend for improving detection. No camera images are sent.</label>
       <button id="submit-feedback" class="primary" type="submit">Save test feedback</button>
     </form>
     <div class="controls"><button id="export-feedback">Export saved feedback (JSON)</button></div>

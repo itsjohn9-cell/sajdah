@@ -143,8 +143,7 @@ export function generateMatRakatFrames({
     200,
     { 
       faceScale: 0.45,
-      // If screen light is off and dark, optical occlusion / isCovered can trigger; if on, pose handles it
-      isCovered: !screenLightOn,
+      proximity: prolongedUnknownInSujud,
     }
   );
 
@@ -165,7 +164,7 @@ export function generateMatRakatFrames({
     200,
     {
       faceScale: 0.45,
-      isCovered: !screenLightOn,
+      proximity: prolongedUnknownInSujud,
     }
   );
 
@@ -663,4 +662,3 @@ export const BENCHMARK_SCENARIOS = [
     },
   },
 ];
-
