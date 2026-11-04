@@ -33,6 +33,113 @@ export function getLocalDiagnostics() {
   };
 }
 
+function cleanText(value, maximum) {
+  return [...String(value)]
+    .filter(character => {
+      const code = character.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("")
+    .trim()
+    .slice(0, maximum);
+}
+
+export async function getFeedbackDiagnostics() {
+  const cached = !stream && !starting ? lastSessionDiagnostics : null;
+  const nativeInfo = readDeviceMetadata();
+  let browserHints = {};
+  if (typeof navigator !== "undefined" && navigator.userAgentData?.getHighEntropyValues) {
+    try {
+      browserHints = await navigator.userAgentData.getHighEntropyValues([
+        "model", "platformVersion", "fullVersionList",
+      ]);
+    } catch (error) {
+      console.error("Sajdah browser metadata unavailable", error);
+      deviceMetadataError = "Detailed browser metadata unavailable.";
+    }
+  }
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent || "";
+  const androidVersion = /Android\s+([\d.]+)/i.exec(userAgent)?.[1] || "";
+  const userAgentModel = /Android[^;)]*;\s*([^;)]+?)(?:\s+Build\/[^;)]+)?\s*[;)]/i.exec(userAgent)?.[1]?.trim() || "";
+  const browserMatch = /(Edg|SamsungBrowser|CriOS|Chrome|Firefox|Version)\/([\d.]+)/.exec(userAgent);
+  const hintedBrowser = browserHints.fullVersionList?.find(item =>
+    /Edge|Chrome|Chromium|Firefox|Safari/i.test(item.brand))?.version || "";
+  const device = {
+    manufacturer: nativeInfo.manufacturer || "",
+    model: nativeInfo.model || browserHints.model || userAgentModel,
+    osVersion: nativeInfo.osVersion || browserHints.platformVersion || androidVersion,
+    appVersion: nativeInfo.appVersion || "",
+    browserVersion: browserMatch ? `${browserMatch[1]} ${browserMatch[2]}` : hintedBrowser,
+    webViewVersion: nativeInfo.webViewVersion || "",
+    platform: nativeInfo.platform || browserHints.platform ||
+      (/Android/i.test(userAgent) ? "Android" : typeof navigator === "undefined" ? "" : navigator.platform || ""),
+  };
+  if (!device.appVersion && typeof fetch === "function") {
+    try {
+      const response = await fetch(new URL("../version.json", import.meta.url), {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) {
+        deviceMetadataError = `App version lookup unavailable (HTTP ${response.status}).`;
+      } else {
+        const version = await response.json();
+        device.appVersion = `${version.version || ""}${version.build_number ? `+${version.build_number}` : ""}`;
+      }
+    } catch (error) {
+      console.error("Sajdah app version lookup failed", error);
+      deviceMetadataError = "App version lookup unavailable.";
+    }
+  }
+
+  const tracking = cached || feedbackTrackingSnapshot();
+  return {
+    trackingState: tracking.trackingState,
+    status: tracking.status,
+    placement: tracking.placement,
+    calibrationMode: tracking.calibrationMode,
+    calibrated: tracking.calibrated,
+    phase: tracking.phase,
+    lastPosture: tracking.lastPosture,
+    lightingCondition: tracking.lightingCondition,
+    sensorError: tracking.sensorError,
+    deviceMetadataError,
+    frameCounts: {
+      camera: tracking.cameraFrames,
+      pose: tracking.poseFrames,
+      classified: tracking.classifiedFrames,
+      unknown: tracking.unknownFrames,
+      noPose: tracking.noPoseFrames,
+      unclassifiedPose: tracking.unclassifiedPoseFrames,
+      calibration: tracking.calibrationFrames,
+      calibrationPose: tracking.calibrationPoseFrames,
+      calibrationNoPose: tracking.calibrationNoPoseFrames,
+      calibrationNotUpright: tracking.calibrationNotUprightFrames,
+      calibrationUnstable: tracking.calibrationUnstableFrames,
+      multiplePerson: tracking.multiplePersonFrames,
+      lastPoseCount: tracking.lastPoseCount,
+    },
+    camera: {
+      width: tracking.cameraWidth,
+      height: tracking.cameraHeight,
+      durationMs: tracking.cameraDurationMs,
+      screenLightEnabled: tracking.screenLightEnabled,
+      diagnosticRecordingEnabled: tracking.diagnosticRecordingEnabled,
+      recordingSupported: tracking.recordingSupported,
+    },
+    sensorAvailability: tracking.sensorAvailability,
+    device: Object.fromEntries(Object.entries(device).map(([key, value]) => [
+      key, typeof value === "string" ? cleanText(value, 100) : "",
+    ])),
+    browser: userAgent.slice(0, 300),
+    viewport: `${typeof innerWidth === "number" ? innerWidth : 0}x${typeof innerHeight === "number" ? innerHeight : 0}`,
+    screen: {
+      width: typeof screen === "undefined" ? 0 : screen.width,
+      height: typeof screen === "undefined" ? 0 : screen.height,
+      pixelRatio: typeof devicePixelRatio === "number" ? Math.min(8, Math.max(0.5, devicePixelRatio)) : 1,
+    },
+  };
+}
+
 export function getRecordedVideoUrl() {
   return recordedVideoUrl;
 }
@@ -106,6 +213,90 @@ let lastPoseTime = 0;
 let mediaRecorder = null;
 let recordedChunks = [];
 let recordedVideoUrl = null;
+let statusText = "Camera off. Allow camera access only when you are ready.";
+let lastSessionDiagnostics = null;
+let deviceMetadataError = "";
+let cameraStartedAt = null;
+let cameraFrames = 0;
+let poseFrames = 0;
+let classifiedFrames = 0;
+let unknownFrames = 0;
+let noPoseFrames = 0;
+let unclassifiedPoseFrames = 0;
+let calibrationFrames = 0;
+let calibrationPoseFrames = 0;
+let calibrationNoPoseFrames = 0;
+let calibrationNotUprightFrames = 0;
+let calibrationUnstableFrames = 0;
+let multiplePersonFrames = 0;
+let lastPoseCount = 0;
+
+function readDeviceMetadata() {
+  if (!window.SijdaSensors || typeof window.SijdaSensors.getDeviceInfo !== "function") return {};
+  try {
+    const info = JSON.parse(window.SijdaSensors.getDeviceInfo());
+    if (!info || typeof info !== "object" || Array.isArray(info)) {
+      throw new Error("Invalid native device metadata");
+    }
+    return info;
+  } catch (error) {
+    console.error("Sajdah native device metadata unavailable", error);
+    deviceMetadataError = "Native device details unavailable.";
+    return {};
+  }
+}
+
+function feedbackTrackingSnapshot() {
+  const resolutionWidth = video?.videoWidth || 0;
+  const resolutionHeight = video?.videoHeight || 0;
+  const state = counter.complete ? "complete"
+    : starting ? "starting"
+      : calibrating ? "calibrating"
+        : !stream ? "stopped"
+          : counter.paused ? "paused" : "tracking";
+  const available = key => Number.isFinite(latestSensors[key]);
+  return {
+    trackingState: state,
+    status: cleanText(statusText, 300),
+    placement: $("placement")?.value === "mat" ? "mat" : $("placement")?.value === "auto" ? "auto" : "unknown",
+    calibrationMode: calibration?.mode || "none",
+    calibrated: Boolean(calibration),
+    cameraFrames, poseFrames, classifiedFrames, unknownFrames, noPoseFrames,
+    unclassifiedPoseFrames, calibrationFrames, calibrationPoseFrames,
+    calibrationNoPoseFrames, calibrationNotUprightFrames, calibrationUnstableFrames,
+    multiplePersonFrames,
+    lastPoseCount, lastPosture: lastEvidence.posture || "unknown",
+    phase: counter.phase,
+    cameraWidth: resolutionWidth, cameraHeight: resolutionHeight,
+    cameraDurationMs: cameraStartedAt === null ? 0 : Math.min(
+      86_400_000, Math.max(0, Math.round(performance.now() - cameraStartedAt)),
+    ),
+    lightingCondition: lightingMonitor.condition || "unknown",
+    screenLightEnabled: screenLight,
+    sensorAvailability: {
+      camera: Boolean(stream),
+      proximity: typeof latestSensors.proximity === "boolean",
+      light: available("lux"),
+      orientation: available("pitch") && available("roll"),
+      accelerometer: available("acceleration"),
+      gyroscope: available("rotationRate"),
+    },
+    diagnosticRecordingEnabled: Boolean($("record-test-video")?.checked),
+    recordingSupported: typeof MediaRecorder !== "undefined",
+    sensorError: cleanText(sensorError, 100),
+  };
+}
+
+function resetFeedbackDiagnostics() {
+  lastSessionDiagnostics = null;
+  deviceMetadataError = "";
+  cameraStartedAt = null;
+  cameraFrames = poseFrames = classifiedFrames = unknownFrames = noPoseFrames = 0;
+  unclassifiedPoseFrames = calibrationFrames = calibrationPoseFrames = 0;
+  calibrationNoPoseFrames = calibrationNotUprightFrames = 0;
+  calibrationUnstableFrames = multiplePersonFrames = 0;
+  lastPoseCount = 0;
+}
 
 function resetEvidence() {
   poseEvidence.reset();
@@ -126,8 +317,15 @@ function startRecording(mediaStream) {
     recordedVideoUrl = null;
   }
   const recordCheckbox = $("record-test-video");
-  if (recordCheckbox && !recordCheckbox.checked) return;
-  if (typeof MediaRecorder === "undefined") return;
+  const recordingStatus = $("recording-status");
+  if (recordCheckbox && !recordCheckbox.checked) {
+    if (recordingStatus) recordingStatus.textContent = "Diagnostic recording is off. No video is recorded or uploaded.";
+    return;
+  }
+  if (typeof MediaRecorder === "undefined") {
+    if (recordingStatus) recordingStatus.textContent = "This browser does not support local video recording. Camera counting can still be used.";
+    return;
+  }
   try {
     const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
       ? "video/webm;codecs=vp8"
@@ -137,13 +335,19 @@ function startRecording(mediaStream) {
           ? "video/mp4"
           : "";
     const options = mimeType ? { mimeType } : undefined;
-    mediaRecorder = new MediaRecorder(mediaStream, options);
-    mediaRecorder.ondataavailable = e => {
+    const recorder = new MediaRecorder(mediaStream, options);
+    mediaRecorder = recorder;
+    recorder.ondataavailable = e => {
       if (e.data && e.data.size > 0) recordedChunks.push(e.data);
     };
-    mediaRecorder.onstop = () => {
+    recorder.onerror = event => {
+      const error = event.error || new Error("Recording failed.");
+      console.error("Sijda diagnostic video recording failed", error);
+      if (recordingStatus) recordingStatus.textContent = `Local recording failed: ${error.message}. No video was uploaded.`;
+    };
+    recorder.onstop = () => {
       if (recordedChunks.length > 0) {
-        const type = (mediaRecorder && mediaRecorder.mimeType) || "video/webm";
+        const type = recorder.mimeType || "video/webm";
         const blob = new Blob(recordedChunks, { type });
         recordedVideoUrl = URL.createObjectURL(blob);
         const player = $("diagnostic-video-player");
@@ -155,15 +359,21 @@ function startRecording(mediaStream) {
           downloadBtn.download = `sijda-prayer-test-${Date.now()}.${type.includes("mp4") ? "mp4" : "webm"}`;
         }
         if (container) container.hidden = false;
+        if (recordingStatus) recordingStatus.textContent = "Local recording ready to review or download. It stays on this device and is never uploaded.";
+      } else if (recordingStatus && !recordingStatus.textContent.startsWith("Local recording failed:")) {
+        recordingStatus.textContent = "No video data was recorded. Counting feedback can still be submitted.";
       }
     };
-    mediaRecorder.start(1000);
-  } catch (e) {
-    console.warn("Sijda diagnostic video recording failed to start", e);
+    recorder.start(1000);
+    if (recordingStatus) recordingStatus.textContent = "Recording locally on this device. Stop the test to review or download; video is never uploaded.";
+  } catch (error) {
+    console.error("Sijda diagnostic video recording failed to start", error);
+    if (recordingStatus) recordingStatus.textContent = `Local recording could not start: ${error.message}. Camera counting can still be used.`;
   }
 }
 
 function stopRecording(discard = false) {
+  const recordingStatus = $("recording-status");
   if (discard) {
     recordedChunks = [];
     if (mediaRecorder) {
@@ -178,9 +388,13 @@ function stopRecording(discard = false) {
     if (player) player.removeAttribute("src");
     if (downloadButton) downloadButton.removeAttribute("href");
     if (container) container.hidden = true;
+    if (recordingStatus) recordingStatus.textContent = "Recording discarded. No video was uploaded.";
   }
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    try { mediaRecorder.stop(); } catch {}
+    try { mediaRecorder.stop(); } catch (error) {
+      console.error("Sijda diagnostic video recording could not stop", error);
+      if (recordingStatus) recordingStatus.textContent = `Local recording could not be finalized: ${error.message}.`;
+    }
   }
   mediaRecorder = null;
 }
@@ -316,7 +530,15 @@ const phaseLabels = {
   exit: "Second sajdah detected. Waiting for sitting or standing.",
 };
 
-function status(message) { $("status").textContent = message; }
+function status(message) {
+  statusText = String(message);
+  $("status").textContent = statusText;
+}
+
+function pauseForInterruption(reason) {
+  if (!counter.paused) interruptions++;
+  counter.pause(reason);
+}
 
 function render() {
   $("totals").textContent = `${counter.rakats.length} / ${counter.target} estimated rakat · ${counter.sajdahs} sajdahs in current rakat`;
@@ -371,6 +593,8 @@ function render() {
 }
 
 function stop(message = "Camera stopped. Review your estimates before continuing.") {
+  status(message);
+  lastSessionDiagnostics = feedbackTrackingSnapshot();
   stopRecording();
   setScreenLight(false);
   setSensorsEnabled(false);
@@ -388,9 +612,8 @@ function stop(message = "Camera stopped. Review your estimates before continuing
   detector = null;
   calibration = null;
   calibrating = false;
-  interruptions++;
   counter.pause("Camera stopped. Restart the current rakat after calibration.");
-  status(message);
+  cameraStartedAt = null;
   render();
 }
 
@@ -427,12 +650,16 @@ async function start() {
     stream = acquired;
     for (const track of stream.getVideoTracks()) {
       track.addEventListener("ended", () => {
-        if (token === generation) stop("Camera stream ended. Review estimates and enable camera again.");
+        if (token === generation) {
+          pauseForInterruption("Camera stream ended. Review estimates and enable camera again.");
+          stop("Camera stream ended. Review estimates and enable camera again.");
+        }
       });
     }
     video.srcObject = stream;
     await video.play();
     if (token !== generation) return;
+    cameraStartedAt ??= performance.now();
     sensorError = "";
     setSensorsEnabled(true);
     startRecording(stream);
@@ -475,7 +702,7 @@ function loop(time) {
         status("Camera frames stopped. Calibration is on hold. Check the preview or restart the camera.");
       } else if (!counter.paused) {
         resetEvidence();
-        counter.pause("Camera frames stopped. Restart the current rakat after checking the preview.");
+        pauseForInterruption("Camera frames stopped. Restart the current rakat after checking the preview.");
         status(counter.reason);
         render();
       }
@@ -486,6 +713,10 @@ function loop(time) {
       sampleLighting(time);
       const result = detector.detectForVideo(video, time);
       const { pose: points, isMultiple } = selectPrimaryPose(result.landmarks);
+      cameraFrames++;
+      lastPoseCount = Array.isArray(result.landmarks) ? result.landmarks.length : 0;
+      if (points) poseFrames++;
+      else noPoseFrames++;
       const sensorData = getSensorData(time);
       const changedAngle = calibration && Number.isFinite(calibrationPitch) && Number.isFinite(devicePitch) &&
         (Math.abs(devicePitch - calibrationPitch) > 15 ||
@@ -496,8 +727,9 @@ function loop(time) {
         baseline = null;
         if (!calibrating) {
           calibration = null;
-          counter.pause("Phone moved. Recalibrate before continuing; completed estimates are kept.");
+          pauseForInterruption("Phone moved. Recalibrate before continuing; completed estimates are kept.");
         }
+        unknownFrames++;
         status(calibrating ? "Keep the phone still. Standing calibration restarted." : counter.reason);
         recordTransition(time, "unknown");
         render();
@@ -505,7 +737,9 @@ function loop(time) {
         return;
       }
       if (calibrating) {
+        calibrationFrames++;
         if (isMultiple) {
+          multiplePersonFrames++;
           calibMultipleFrames++;
           calibrationSince = null;
           baseline = null;
@@ -522,11 +756,16 @@ function loop(time) {
         const sample = standingCalibration(points, {
           allowAdaptive: true, orientation, mode: $("placement").value === "mat" ? "mat" : undefined,
         });
+        if (!sample) {
+          if (points) calibrationNotUprightFrames++;
+          else calibrationNoPoseFrames++;
+        }
         const stable = sample && (!baseline ||
           (sample.mode === baseline.mode &&
            (!Number.isFinite(sample.hipY) || Math.abs(sample.hipY - baseline.hipY) < 0.06) &&
            Math.abs(sample.headY - baseline.headY) < 0.06));
         if (!stable) {
+          if (sample) calibrationUnstableFrames++;
           calibrationSince = null;
           baseline = null;
           let guidance = "";
@@ -541,6 +780,7 @@ function loop(time) {
           if (diag) guidance = ` Fix: ${diag.fix}`;
           status(`Setup: one person must be visible and upright. Keep head and shoulders in view; adjust distance, camera tilt or lighting.${guidance}`);
         } else {
+          calibrationPoseFrames++;
           if (calibrationSince === null) { calibrationSince = time; baseline = sample; }
           status("Standing visible. Hold still for calibration...");
           if (time - calibrationSince >= 1500) {
@@ -556,6 +796,7 @@ function loop(time) {
       } else if (counter.paused && !counter.complete &&
                  counter.reason === "Multiple people detected. Only one person should be in camera view." &&
                  calibration) {
+        if (isMultiple) multiplePersonFrames++;
         if (!isMultiple && points) {
           multipleClearFrames++;
           if (multipleClearFrames >= 20) {
@@ -571,13 +812,15 @@ function loop(time) {
         recordTransition(time, "unknown");
       } else if (!counter.paused && !counter.complete) {
         if (isMultiple) {
+          multiplePersonFrames++;
           const threshold = (counter.phase === "firstSajdah" || counter.phase === "between" || counter.phase === "secondSajdah" || counter.phase === "exit") ? 15 : 8;
           multipleFrames++;
           multipleClearFrames = 0;
           if (multipleFrames >= threshold) {
-            counter.pause("Multiple people detected. Only one person should be in camera view.");
+            pauseForInterruption("Multiple people detected. Only one person should be in camera view.");
             status(counter.reason);
           } else {
+            unknownFrames++;
             counter.observe("unknown", time);
           }
           recordTransition(time, "unknown");
@@ -591,7 +834,15 @@ function loop(time) {
         if (points) lastPoseTime = time;
         lastEvidence = poseEvidence.observe(points, calibration, sensorData, time);
         const { posture } = lastEvidence;
+        if (posture === "unknown") {
+          unknownFrames++;
+          if (points) unclassifiedPoseFrames++;
+        } else {
+          classifiedFrames++;
+        }
+        const wasPaused = counter.paused;
         counter.observe(posture, time, lastEvidence);
+        if (!wasPaused && counter.paused) interruptions++;
         recordTransition(time, posture);
 
         // Haptic feedback checks on Sajdah and Rakat boundaries
@@ -671,6 +922,7 @@ $("reset").addEventListener("click", () => {
   interruptions = 0;
   transitions.length = 0;
   firstObservation = null;
+  resetFeedbackDiagnostics();
   status("New session. Enable the front camera when ready.");
   render();
 
@@ -696,16 +948,22 @@ $("enable-motion").addEventListener("click", async () => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && (stream || starting)) stop("Page hidden: camera stopped. Recalibrate before continuing.");
+  if (document.hidden && (stream || starting)) {
+    pauseForInterruption("Page hidden: camera stopped. Recalibrate before continuing.");
+    stop("Page hidden: camera stopped. Recalibrate before continuing.");
+  }
 });
-window.addEventListener("pagehide", () => stop());
+window.addEventListener("pagehide", () => {
+  if (stream || starting) pauseForInterruption("Page closed: camera stopped.");
+  stop();
+});
 window.addEventListener("message", event => {
   if (event.origin === location.origin && event.source === window.parent &&
       event.data === "sijda-stop-camera") stop("Camera stopped after leaving the rakat screen.");
 });
 window.addEventListener("resize", () => {
   if (stream && !calibrating) {
-    counter.pause("View changed. Recalibrate before continuing.");
+    pauseForInterruption("View changed. Recalibrate before continuing.");
     calibration = null;
     status(counter.reason);
     render();
@@ -752,6 +1010,8 @@ if (recordCheckbox) {
       stopRecording(true);
     } else if (stream) {
       startRecording(stream);
+    } else {
+      $("recording-status").textContent = "Recording will start when the camera starts. The clip stays on this device and is never uploaded.";
     }
   });
 }

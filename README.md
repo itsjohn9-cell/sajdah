@@ -208,14 +208,20 @@ lists Apache-2.0 for the BlazePose models; see the attribution for source eviden
 
 ## Tester feedback and Firebase
 
-Open **Rakat → Report test results / placement feedback**. Enter whether the
-count was correct, actual rakat/sajdahs, mobile placement, approximate distance,
-lighting, phone/browser and optional notes. Submitting stops the camera first.
-A clearly labeled example demonstrates incorrect detection and never uploads.
-Feedback does not change counters or automatically train a model.
+Use the always-visible **Report a counting problem** button or open
+**Rakat → Report test results / placement feedback**. Enter whether the count
+was correct, actual rakat/sajdahs, mobile placement, approximate distance,
+lighting and optional notes. Phone/app/browser details and bounded tracking
+diagnostics (including calibration outcome, frame counters and available
+sensors) are collected automatically where supported. Submitting stops the
+camera first. A clearly labeled example demonstrates incorrect detection and
+never uploads. Feedback does not change counters or automatically train a model.
 
 Reports are saved locally; only checking the consent checkbox uploads to
-`sijda-testing-20261027`. The free Firestore database is in `us-central1` (Iowa).
+`sijda-testing-20261027`. Consent applies to that report and the upload includes
+the automatically collected diagnostics; it excludes video, images, raw body
+landmarks, location, audio and unique device IDs. The free Firestore database
+is in `us-central1` (Iowa).
 The owner chose retention until manual deletion. No paid services or billing
 were enabled. Anonymous Auth permits create-only reports; client reads, lists,
 updates, deletes, unauthenticated writes and sample uploads are denied.

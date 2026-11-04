@@ -85,6 +85,8 @@ try {
 - Experimental camera-required counting with available proximity, light, orientation, accelerometer and gyroscope assistance.
 - Short recognition filters (200 ms raised posture; 400 ms sajdah), distinct sajdah release detection, and corrected restart handling.
 - Results distinguish visually observed sequences from pair-based estimates and list unverified phases.
+- Prominent feedback access with automatically collected bounded tracking diagnostics; upload still requires per-report consent.
+- Feedback diagnostics exclude camera/video, images, raw body landmarks, location and audio.
 - Privacy/permission, backup-validation and concurrent-save safeguards.
 - **Real-phone flat-mat counting accuracy is not yet verified. Review estimates and use manual counting when uncertain.**
 - The default download is the smaller arm64 APK when available; other ABI-specific builds are listed below.

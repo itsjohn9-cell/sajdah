@@ -68,6 +68,7 @@
     .session-summary #totals { font-size: 1.25rem; }
     .session-summary #status { min-height: 0; padding: 10px 12px; }
     .screen-light .session-summary { background: white; }
+    .report-button { width: 100%; margin-top: 8px; }
     summary { cursor: pointer; padding: 12px 0; font-weight: 600; color: var(--primary); }
     #history:empty::after { content: "No completed rakat estimated in this session."; color: #6a7c73; }
     #history { margin: 8px 0; }
@@ -97,7 +98,9 @@
     <p id="totals" aria-live="polite">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
     <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
     <p id="session-state">Not tracking. No completed rakat estimated yet.</p>
-    <a id="review-feedback" href="#feedback-section" style="color: #0f4c3a; font-weight: 600;">Review / report this test</a>
+    <button id="review-feedback" class="primary report-button" type="button" aria-controls="feedback-section">
+      Report a counting problem
+    </button>
   </section>
   <div class="namaz-flow-strip" aria-label="Namaz prostration sequence">
     <span class="flow-badge active">1. Qiyam (Stand)</span>
@@ -138,6 +141,7 @@
   </label>
   <p id="diagnostic-video-privacy">If enabled, a temporary video stays in this page until you download it or leave.
     Sajdah never uploads this recording, and it is not included in feedback.</p>
+  <p id="recording-status" role="status">Diagnostic recording is off. No video is recorded or uploaded.</p>
   <div class="preview">
     <p id="camera-placeholder">Camera off. Tap Enable front camera to begin setup.</p>
     <video id="video" hidden playsinline muted disablepictureinpicture aria-label="Mirrored front camera preview"></video>
@@ -205,10 +209,12 @@
     generally available in browsers.</p>
   <details id="feedback-section">
     <summary>Report test results / placement feedback</summary>
-    <p>Stop the camera before filling this in. Counts and a limited posture-transition
-      log (no images or raw body landmarks) are captured when you submit.
-      Feedback is saved locally. Upload is optional and requires your consent.
-      Do not include names, contact details or other sensitive information.</p>
+    <p>Stop the camera before filling this in. Device/app details and bounded tracking diagnostics are filled in
+    automatically when available. Counts and a limited posture-transition
+    log are included; camera/video, images, raw body landmarks, location,
+    audio and device identifiers are never uploaded. Feedback is saved
+    locally. Upload requires your consent for each report.
+    Do not include names, contact details or other sensitive information.</p>
     <form id="feedback-form">
       <label>Was the count right?
         <select name="verdict" required>
@@ -217,6 +223,7 @@
       </label>
       <label>Actual rakat you completed <input name="expectedRakat" type="number" min="0" max="100" step="1" required></label>
       <label>Actual sajdahs you completed <input name="expectedSajdahs" type="number" min="0" max="200" step="1" required></label>
+      <p id="sajdah-count-hint">Automatically set to two sajdahs per rakat; edit for a partial prayer or correction.</p>
       <label>Mobile placement
         <select name="placement">        <option value="floor-tilted">On floor (flat mat or tilted)</option><option value="low-stand">Low phone stand</option><option value="chair">Chair height</option><option value="shelf">Shelf/table</option><option value="other">Other (describe below)</option></select>
       </label>
@@ -224,11 +231,11 @@
         <select name="distance"><option value="unknown">Not sure</option><option value="under-1m">Under 1 metre</option><option value="1-2m">1–2 metres</option><option value="over-2m">Over 2 metres</option></select>
       </label>
       <label>Lighting <select name="lighting"><option value="normal">Normal</option><option value="bright">Bright</option><option value="dim">Dim</option></select></label>
-      <label>Phone model and browser <input name="device" maxlength="120" placeholder="e.g. Galaxy A54, Chrome" required></label>
+      <label>Detected phone and app <input name="device" maxlength="120" placeholder="Detected automatically; edit if incorrect" required></label>
       <label>What happened? Include whether screen light was on or off.
         <textarea name="notes" rows="3" maxlength="1000" placeholder="Screen light on/off, room lighting, camera tilt, clothing, missing/double counts, which posture was missed..."></textarea></label>
       <label class="consent"><input name="consent" type="checkbox">
-        I consent to uploading this report, device/browser information and the posture-transition log to Sajdah's Firebase testing backend for improving detection. No camera images are sent.</label>
+        Upload this report and automatically collected device/tracking diagnostics to Sajdah's Firebase testing backend. These details may reveal prayer activity. No camera/video, images, raw body landmarks, location, audio or unique device identifiers are included.</label>
       <button id="submit-feedback" class="primary" type="submit">Save test feedback</button>
     </form>
     <div class="controls"><button id="export-feedback">Export saved feedback (JSON)</button></div>

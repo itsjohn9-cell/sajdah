@@ -7,16 +7,17 @@ service cloud.firestore {
     function shortText(value, maximum) {
       return value is string && value.size() <= maximum;
     }
+    function validFeedbackFields(value) {
+      return value.keys().size() == 23
+        || (value.keys().size() == 24 && 'diagnostics' in value);
+    }
+    function validDiagnostics(value) {
+      return shortText(value, 5000);
+    }
     match /feedback/{reportId} {
       allow create: if request.auth != null
         && request.auth.token.firebase.sign_in_provider == 'anonymous'
-        && request.resource.data.keys().hasOnly([
-          'id', 'sessionId', 'algorithmVersion', 'target', 'detectedRakat',
-          'detectedSajdahs', 'interruptions', 'completed', 'transitions',
-          'schemaVersion', 'createdAt', 'sample', 'verdict', 'expectedRakat',
-          'expectedSajdahs', 'placement', 'distance', 'lighting', 'device',
-          'notes', 'browser', 'viewport', 'owner'
-        ])
+        && validFeedbackFields(request.resource.data)
         && request.resource.data.owner == request.auth.uid
         && request.resource.data.id == reportId
         && shortText(reportId, 64)
@@ -45,7 +46,9 @@ service cloud.firestore {
         && request.resource.data.device.size() > 0
         && shortText(request.resource.data.notes, 1000)
         && shortText(request.resource.data.browser, 300)
-        && shortText(request.resource.data.viewport, 40);
+        && shortText(request.resource.data.viewport, 40)
+        && (!('diagnostics' in request.resource.data) ||
+          validDiagnostics(request.resource.data.diagnostics));
       allow read, update, delete: if false;
     }
   }

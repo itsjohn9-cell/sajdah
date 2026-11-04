@@ -1,4 +1,4 @@
-import { feedbackSnapshot, stopForFeedback } from "./camera.mjs";
+import { feedbackSnapshot, getFeedbackDiagnostics, stopForFeedback } from "./camera.mjs";
 import { validateFeedback, uploadFeedback } from "./feedback_service.mjs";
 
 const form = document.getElementById("feedback-form");
@@ -11,11 +11,50 @@ const sample = {
   notes: "SAMPLE ONLY: head left the frame in the second sajdah.",
 };
 document.getElementById("feedback-sample").textContent = JSON.stringify(sample, null, 2);
+const deviceInput = form.querySelector('[name="device"]');
+const expectedRakatInput = form.querySelector('[name="expectedRakat"]');
+const expectedSajdahsInput = form.querySelector('[name="expectedSajdahs"]');
+
+function formatDevice(device = {}) {
+  return [
+    [device.manufacturer, device.model].filter(Boolean).join(" "),
+    device.osVersion && `${device.platform || "OS"} ${device.osVersion}`,
+    device.appVersion && `Sajdah ${device.appVersion}`,
+    device.webViewVersion && `WebView ${device.webViewVersion}`,
+    !device.webViewVersion && device.browserVersion,
+  ].filter(Boolean).join(" · ").slice(0, 120);
+}
+
+const initialDiagnostics = getFeedbackDiagnostics()
+  .then(diagnostics => {
+    if (deviceInput && !deviceInput.value) deviceInput.value = formatDevice(diagnostics.device);
+    if (!deviceInput?.value) {
+      document.getElementById("feedback-status").textContent =
+        "Phone details could not be detected automatically. Enter the phone model; tracking diagnostics will still be included.";
+    }
+    return diagnostics;
+  })
+  .catch(error => {
+    console.error("Sajdah device details unavailable", error);
+    document.getElementById("feedback-status").textContent =
+      "Automatic phone details are unavailable. Enter the phone model; tracking diagnostics will still be included.";
+    return null;
+  });
+
+function updateExpectedSajdahs() {
+  if (!expectedRakatInput || !expectedSajdahsInput) return;
+  const rakats = Number(expectedRakatInput.value);
+  expectedSajdahsInput.value = Number.isInteger(rakats) && rakats >= 0
+    ? String(rakats * 2) : "";
+}
+
+expectedRakatInput?.addEventListener("input", updateExpectedSajdahs);
 
 document.getElementById("review-feedback").addEventListener("click", () => {
   const section = document.getElementById("feedback-section");
   section.open = true;
   section.style.scrollMarginTop = `${document.querySelector(".session-summary").offsetHeight + 12}px`;
+  if (typeof section.scrollIntoView === "function") section.scrollIntoView({ behavior: "smooth" });
 });
 
 const quickReviewSection = document.getElementById("quick-review");
@@ -76,18 +115,21 @@ form.addEventListener("submit", async event => {
   button.disabled = true;
   message.textContent = "Saving your feedback...";
   try {
+    const snapshot = feedbackSnapshot();
+    const diagnostics = await getFeedbackDiagnostics();
+    await initialDiagnostics;
     stopForFeedback();
     const data = new FormData(form);
     const report = {
-      ...feedbackSnapshot(), id: crypto.randomUUID(), schemaVersion: 1,
+      ...snapshot, diagnostics, id: crypto.randomUUID(), schemaVersion: 1,
       createdAt: new Date().toISOString(), sample: false,
       verdict: data.get("verdict"), expectedRakat: Number(data.get("expectedRakat")),
       expectedSajdahs: Number(data.get("expectedSajdahs")),
       placement: data.get("placement"), distance: data.get("distance"),
-      lighting: data.get("lighting"), device: data.get("device").trim(),
+      lighting: data.get("lighting"),             device: String(data.get("device") || "").trim() || formatDevice(diagnostics.device),
       notes: data.get("notes").trim(),
-      browser: navigator.userAgent.slice(0, 300),
-      viewport: `${innerWidth}x${innerHeight}`,
+      browser: diagnostics.browser || navigator.userAgent.slice(0, 300),
+      viewport: diagnostics.viewport || `${innerWidth}x${innerHeight}`,
     };
     validateFeedback(report);
     // Keep an explicit local copy before any network request.

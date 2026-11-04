@@ -175,7 +175,16 @@ test("start, blank inference, stop and no automatic camera acquisition", async (
   app.frame(100);
   assert.match(app.element("status").textContent, /one person/);
   assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
+  const diagnostics = await app.module.namespace.getFeedbackDiagnostics();
+  assert.equal(diagnostics.trackingState, "calibrating");
+  assert.equal(diagnostics.frameCounts.camera, 1);
+  assert.equal(diagnostics.frameCounts.calibration, 1);
+  assert.equal(diagnostics.frameCounts.calibrationNoPose, 1);
+  assert.equal(diagnostics.frameCounts.noPose, 1);
+  assert.equal(diagnostics.camera.diagnosticRecordingEnabled, false);
+  assert.equal("location" in diagnostics, false);
   app.click("stop");
+  assert.equal((await app.module.namespace.getFeedbackDiagnostics()).trackingState, "calibrating");
   assert.ok(app.tracks.every(track => track.ended));
   assert.equal(app.closed(), 1);
   assert.equal(app.element("video").srcObject, null);

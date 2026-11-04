@@ -10,6 +10,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
@@ -190,6 +191,25 @@ class RakatCameraView(
                 .put("pitch", pitch).put("roll", roll)
                 .put("accelerationAvailable", fresh(accelerationTime)).put("acceleration", acceleration)
                 .put("gyroscopeAvailable", fresh(gyroscopeTime)).put("rotationRate", rotationRate)
+                .toString()
+        }
+
+        @JavascriptInterface
+        fun getDeviceInfo(): String {
+            val appVersion = activity.packageManager
+                .getPackageInfo(activity.packageName, 0).versionName.orEmpty()
+            val webViewVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WebView.getCurrentWebViewPackage()?.versionName.orEmpty()
+            } else {
+                ""
+            }
+            return JSONObject()
+                .put("manufacturer", Build.MANUFACTURER.orEmpty())
+                .put("model", Build.MODEL.orEmpty())
+                .put("osVersion", Build.VERSION.RELEASE.orEmpty())
+                .put("appVersion", appVersion)
+                .put("webViewVersion", webViewVersion)
+                .put("platform", "Android")
                 .toString()
         }
     }

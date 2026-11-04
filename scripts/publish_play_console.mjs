@@ -122,7 +122,7 @@ async function publish() {
     const releaseNotes = [
       {
         language: 'en-US',
-        text: `${versionName}: Experimental camera-required, sensor-assisted rakat estimates with faster movement filters, distinct sajdah release detection and per-phase evidence. Improved restart, privacy and data safeguards. Real-phone counting accuracy remains unverified; review estimates and use manual counting if uncertain.`
+        text: `${versionName}: Easier access to counting feedback, with phone/app/browser details and bounded tracking diagnostics collected automatically. Diagnostics and report data are uploaded only when you consent for that report; no camera/video, images, raw body landmarks, location or audio are included. Experimental camera-required rakat estimates remain unverified on real phones; review estimates and use manual counting if uncertain.`
       }
     ];
 
