@@ -19,7 +19,20 @@ if (!versionMatch) {
 const versionName = versionMatch[1];
 const versionCode = versionMatch[2] || '1';
 
-const flutterBin = process.env.FLUTTER_BIN || 'flutter';
+const candidateFlutterPaths = [
+  process.env.FLUTTER_BIN,
+  path.resolve(process.env.HOME || '', 'Projects/flutter-sdk/bin/flutter'),
+  '/Users/mohammadjhone/Projects/flutter-sdk/bin/flutter',
+  'flutter',
+].filter(Boolean);
+
+let flutterBin = 'flutter';
+for (const p of candidateFlutterPaths) {
+  if (p === 'flutter' || fs.existsSync(p)) {
+    flutterBin = p;
+    break;
+  }
+}
 
 console.log('========================================================');
 console.log('       🚀 SAJDAH ONE-CLICK UNIFIED DEPLOYMENT           ');
