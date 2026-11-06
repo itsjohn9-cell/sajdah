@@ -54,9 +54,9 @@ try {
     console.log('⏩ [1/5] Skipping tests (--skip-tests passed)...\n');
   }
 
-  // Step 2: Build AAB and APK
+  // Step 2: Build AAB, APK, and Web
   if (!skipBuild) {
-    console.log('🔨 [2/5] Building Release App Bundle (AAB) & APK...');
+    console.log('🔨 [2/5] Building Release App Bundle (AAB), APK & Web App...');
     console.log('   -> Building AAB...');
     execFileSync(
       flutterBin,
@@ -75,21 +75,27 @@ try {
       ['build', 'apk', '--release', '--split-per-abi', `--build-name=${versionName}`, `--build-number=${versionCode}`],
       { stdio: 'inherit' },
     );
+    console.log('   -> Building Web App...');
+    execFileSync(
+      flutterBin,
+      ['build', 'web', '--release', '--base-href', '/sajdah/'],
+      { stdio: 'inherit' },
+    );
     console.log('✔ Builds complete!\n');
   } else {
     console.log('⏩ [2/5] Skipping build step (--skip-build passed)...\n');
   }
 
-  // Step 3: Push only already-committed source; never stage or create commits here.
+  // Step 3: Push only already-committed source; triggers GitHub Pages web deployment.
   console.log('🌿 [3/5] Synchronizing latest project updates to GitHub main branch...');
-  console.log('   -> Pushing committed changes to origin/main...');
+  console.log('   -> Pushing committed changes to origin/main (deploys web app to GitHub Pages)...');
   execFileSync('git', ['push', 'origin', 'main'], { stdio: 'inherit' });
-  console.log('✔ GitHub main branch is completely up to date!\n');
+  console.log('✔ GitHub main branch is completely up to date & Web deployment triggered!\n');
 
-  // Step 4: Google Play Console Release
-  console.log('📱 [4/5] Uploading & Publishing to Google Play Console...');
-  execFileSync('node', ['scripts/publish_play_console.mjs'], { stdio: 'inherit' });
-  console.log('✔ Published to Google Play!\n');
+  // Step 4: Google Play Console Release (Closed Testing + Internal Testing)
+  console.log('📱 [4/5] Uploading & Publishing to Google Play Console (Closed + Internal tracks)...');
+  execFileSync('node', ['scripts/publish_play_console.mjs', '--tracks=alpha,internal'], { stdio: 'inherit' });
+  console.log('✔ Published to Google Play Closed (Alpha) and Internal tracks!\n');
 
   // Step 5: GitHub Releases Upload
   console.log('🐙 [5/5] Uploading APK to GitHub Releases...');
@@ -99,9 +105,12 @@ try {
   console.log('========================================================');
   console.log('🎉 UNIFIED DEPLOYMENT COMPLETED SUCCESSFULLY!           ');
   console.log('========================================================');
-  console.log('📲 Google Play Track: Closed Testing (Alpha)');
-  console.log(`🐙 GitHub Release   : https://github.com/itsjohn9-cell/sajdah/releases/tag/v${versionName}`);
-  console.log('🌿 GitHub Main Code : https://github.com/itsjohn9-cell/sajdah/tree/main');
+  console.log('📲 Google Play Tracks:');
+  console.log('   - Internal Testing (Instant): https://play.google.com/apps/testing/app.sijda.sijda');
+  console.log('   - Closed Testing (Alpha)   : In review / rolled out to closed group');
+  console.log('🌐 Web App (GitHub Pages)    : https://itsjohn9-cell.github.io/sajdah/');
+  console.log(`🐙 GitHub Release            : https://github.com/itsjohn9-cell/sajdah/releases/tag/v${versionName}`);
+  console.log('🌿 GitHub Main Code          : https://github.com/itsjohn9-cell/sajdah/tree/main');
   console.log('⬇️ PERMANENT DIRECT APK DOWNLOAD LINK:');
   console.log('   https://github.com/itsjohn9-cell/sajdah/releases/latest/download/sajdah-release.apk');
   console.log('========================================================\n');

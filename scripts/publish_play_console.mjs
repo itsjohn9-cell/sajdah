@@ -13,7 +13,7 @@ const POSSIBLE_KEY_PATHS = [
 ].filter(Boolean);
 
 const args = process.argv.slice(2);
-let tracks = ['alpha'];
+let tracks = ['alpha', 'internal'];
 let isDraft = false;
 let aabPath = DEFAULT_AAB_PATH;
 
