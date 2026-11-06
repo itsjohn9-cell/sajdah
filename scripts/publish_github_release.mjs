@@ -71,10 +71,7 @@ try {
   const assets = [sajdahReleaseApk, sajdahVersionedApk, legacySijdaApk, ...splitAssets];
   assets.push(universalReleaseApk, universalVersionedApk);
 
-  if (exists) {
-    console.log(`ℹ Release ${tag} exists. Uploading/overwriting assets...`);
-    execFileSync('gh', ['release', 'upload', tag, ...assets, '--clobber'], { stdio: 'inherit' });
-  } else {
+  if (!exists) {
     console.log(`🚀 Creating GitHub Release ${tag}...`);
     const splitLinks = splitAssets.map(asset => {
       const name = path.basename(asset);
@@ -101,9 +98,26 @@ ${splitLinks || '- Not available for this release.'}
 
     execFileSync(
       'gh',
-      ['release', 'create', tag, ...assets, '--target', 'main', '--title', `Sajdah ${tag} (Build ${versionCode}) - Experimental counting`, '--notes', notes, '--latest'],
+      ['release', 'create', tag, '--target', 'main', '--title', `Sajdah ${tag} (Build ${versionCode}) - Experimental counting`, '--notes', notes, '--latest'],
       { stdio: 'inherit' },
     );
+  }
+
+  console.log(`📦 Uploading release assets for ${tag}...`);
+  for (const asset of assets) {
+    const filename = path.basename(asset);
+    console.log(`   -> Uploading ${filename}...`);
+    let uploaded = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        execFileSync('gh', ['release', 'upload', tag, asset, '--clobber'], { stdio: 'inherit' });
+        uploaded = true;
+        break;
+      } catch (uploadErr) {
+        console.warn(`   ⚠️ Upload failed for ${filename} (attempt ${attempt}/3):`, uploadErr.message);
+        if (attempt === 3) throw uploadErr;
+      }
+    }
   }
 
   console.log('====================================================');
