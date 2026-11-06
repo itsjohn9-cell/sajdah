@@ -15,3 +15,4 @@ Whenever the user says **"go live"** (or asks to deploy/release the app):
 ### 2. Versioning & Quality Gates
 - Every release must bump both the version name and build code in `pubspec.yaml` and `lib/src/app.dart`.
 - The automated regression test suites (`npm test` and `flutter test`) must pass cleanly before any build artifact is published.
+
