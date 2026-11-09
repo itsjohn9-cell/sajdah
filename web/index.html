@@ -31,6 +31,14 @@
 
   <title>Sajdah</title>
   <link rel="manifest" href="manifest.json">
+  <script src="https://sync.35.209.1.82.nip.io/sada-sync-sdk.js" defer></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      if (window.SadaSync) {
+        window.SadaSync.init({ projectId: 'sajdah' });
+      }
+    });
+  </script>
 </head>
 <body>
   <!--
