@@ -2,9 +2,9 @@ export const POSTURES = ["standing", "bow", "sajdah", "sitting", "unknown"];
 
 export const DEFAULT_MAT_CALIBRATION = {
   mode: "mat",
-  headY: 0.22,
-  shoulderY: 0.40,
-  torsoSpan: 0.18,
+  headY: 0.35,
+  shoulderY: 0.52,
+  torsoSpan: 0.17,
   faceScale: 0.15,
 };
 
@@ -276,7 +276,8 @@ export function detectOrientation(beta, _gamma) {
 
 export function standingCalibration(points, options = {}) {
   if (options.allowAdaptive && (options.mode === "mat" || options.orientation === "flat")) {
-    return matCalibration(points);
+    const mat = matCalibration(points);
+    if (mat) return mat;
   }
   const f = features(points);
   if (f) {
@@ -305,7 +306,10 @@ export function standingCalibration(points, options = {}) {
 
 export function adaptiveCalibration(points, options = {}) {
   if (!points) return null;
-  if (options.orientation === "flat" || options.mode === "mat") return matCalibration(points);
+  if (options.orientation === "flat" || options.mode === "mat") {
+    const mat = matCalibration(points);
+    if (mat) return mat;
+  }
 
   const full = standingCalibration(points, { allowAdaptive: false });
   if (full) return full;
@@ -347,8 +351,8 @@ export function adaptiveCalibration(points, options = {}) {
 }
 
 function matCalibration(points) {
-  const up = upperFeatures(points, 0.4);
-  if (!up || up.head.y >= 0.50 || up.head.y >= up.shoulder.y - 0.04) return null;
+  const up = upperFeatures(points, 0.35);
+  if (!up || up.head.y >= 0.52 || up.head.y >= up.shoulder.y - 0.04) return null;
   return {
     mode: "mat", headY: up.head.y, shoulderY: up.shoulder.y,
     torsoSpan: Math.max(up.shoulder.y - up.head.y, 0.08),
@@ -366,10 +370,6 @@ export function estimateFaceScale(points) {
   if (visible(points[2], 0.25) && visible(points[5], 0.25)) {
     return Math.hypot(points[2].x - points[5].x, points[2].y - points[5].y) * 5.0;
   }
-  // Shoulder span (landmarks 11 & 12) scaled to face equivalent
-  if (visible(points[11], 0.25) && visible(points[12], 0.25)) {
-    return Math.hypot(points[11].x - points[12].x, points[11].y - points[12].y) * 0.9;
-  }
   return 0;
 }
 
@@ -378,7 +378,7 @@ export function classifyPose(points, calibration, context = {}) {
 
   // Mode 1: Mat Mode (Phone lying flat or at prostration position on the mat)
   if (calibration.mode === "mat") {
-    const up = upperFeatures(points, 0.4);
+    const up = upperFeatures(points, 0.35);
     if (up && up.head) {
       const faceScale = Number.isFinite(context.faceScale)
         ? context.faceScale
@@ -387,10 +387,16 @@ export function classifyPose(points, calibration, context = {}) {
       // Torso is upright if head is clearly above shoulders
       const torsoUpright = up.shoulder && up.head.y < up.shoulder.y - 0.04;
 
-      // Upright posture close to camera or with lower head position is sitting (Jalsah / Tashahhud)
-      const sittingScale = Math.max(0.25, (calibration.faceScale || 0) * 1.45);
-      if (torsoUpright && (faceScale > sittingScale ||
-          (Number.isFinite(calibration.headY) && up.head.y >= calibration.headY + 0.12))) {
+      const span = calibration.torsoSpan || 0.16;
+      const headDrop = Number.isFinite(calibration.headY) ? (up.head.y - calibration.headY) : 0;
+      const sittingScale = Math.max(0.35, (calibration.faceScale || 0) * 1.6);
+
+      // Upright posture with substantial head drop, very low posture, or close face is sitting (Jalsah / Tashahhud)
+      const isSittingDrop = headDrop > Math.max(span * 1.0, 0.17) && up.head.y >= (calibration.headY || 0.35) + 0.15;
+      const isSittingLow = up.head.y >= 0.58 && up.shoulder && up.shoulder.y >= 0.68;
+      const isSittingClose = faceScale > 0 && faceScale > sittingScale;
+
+      if (torsoUpright && (isSittingDrop || isSittingLow || isSittingClose)) {
         return "sitting";
       }
 
@@ -641,12 +647,12 @@ export function selectPrimaryPose(poses) {
   // 1. It is directly underneath the primary worshipper (same horizontal column: dx < 0.15)
   // 2. Its keypoints are down on the floor tiles (centroidY > 0.70)
   // 3. Its head is at the bottom of the frame (noseY > 0.65) — a reflection does not have an upright head!
-  // 4. The primary worshipper is positioned above it (centroidY < 0.60)
+  // 4. The primary worshipper is positioned above it
   const isFloorReflection = (
     Math.abs(second.centroidX - top.centroidX) < 0.15 &&
     second.centroidY > 0.70 &&
     second.noseY > 0.65 &&
-    top.centroidY < 0.60
+    second.centroidY > top.centroidY + 0.08
   );
 
   // If the second pose is merely a floor reflection, ignore it and track the worshipper:

@@ -10,6 +10,7 @@ import {
   upperFeatures,
   filterValidPoses,
   selectPrimaryPose,
+  DEFAULT_MAT_CALIBRATION,
 } from "../web/rakat/counter.mjs";
 
 function namazSession(target = 2) {
@@ -837,4 +838,63 @@ test("Regression: floor reflection during prostration/sitting does not trigger f
   const { pose, isMultiple } = selectPrimaryPose([worshipperInSajdah, floorReflection]);
   assert.equal(isMultiple, false, "Floor reflection during prostration must NOT flag multiple people");
   assert.ok(pose, "Worshipper pose must be tracked");
+});
+
+test("Regression: phone on floor/mat records standing upright worshipper, starts rakat 1, and records full sequence", () => {
+  // Standing upright 1.5-2m away in front of phone lying on floor/mat
+  // Landmarks have headY: 0.44, shoulderY: 0.60, shoulderSpan: 0.30 (realistic for 1.8m distance)
+  const standingPose = upperBodyLandmarks({ headY: 0.44, shoulderY: 0.60 });
+  standingPose[11] = { x: 0.35, y: 0.60, z: 0, visibility: 0.85 };
+  standingPose[12] = { x: 0.65, y: 0.60, z: 0, visibility: 0.85 };
+
+  // 1. With DEFAULT_MAT_CALIBRATION:
+  const postureDefault = classifyPose(standingPose, DEFAULT_MAT_CALIBRATION);
+  assert.equal(postureDefault, "standing", "Must classify as standing with DEFAULT_MAT_CALIBRATION");
+
+  // 2. With adaptive standingCalibration:
+  const cal = standingCalibration(standingPose, { allowAdaptive: true, mode: "mat", orientation: "flat" });
+  assert.ok(cal, "Must calibrate from standing pose on floor mat");
+  const postureCalibrated = classifyPose(standingPose, cal);
+  assert.equal(postureCalibrated, "standing", "Must classify as standing with adaptive mat calibration");
+
+  // 3. Counter starts recording Rakat immediately upon standing
+  const s = namazSession(2);
+  assert.equal(s.counter.phase, "standing");
+  assert.equal(s.counter.hasStood, false);
+
+  s.hold("standing", 500);
+  assert.equal(s.counter.hasStood, true, "Worshipper standing upright must be recorded as having stood (Qiyam)");
+  assert.equal(s.counter.phase, "bow", "Counter must advance to waiting for ruku");
+  assert.equal(s.counter.observed.qiyam, true);
+
+  // Bow (Ruku)
+  s.hold("bow", 600);
+  assert.equal(s.counter.phase, "upright", "Counter must advance to waiting for standing (Qaumah)");
+  assert.equal(s.counter.observed.ruku, true);
+
+  // Stand upright (Qaumah)
+  s.hold("standing", 500);
+  assert.equal(s.counter.phase, "firstSajdah", "Counter must advance to waiting for first sajdah");
+  assert.equal(s.counter.observed.qaumah, true);
+
+  // First Sajdah
+  s.hold("sajdah", 800);
+  assert.equal(s.counter.sajdahs, 1);
+  assert.equal(s.counter.phase, "between", "Counter must advance to sitting between sajdahs");
+
+  // Sitting (Jalsah)
+  s.hold("sitting", 500);
+  assert.equal(s.counter.phase, "secondSajdah");
+  assert.equal(s.counter.observed.jalsah, true);
+
+  // Second Sajdah
+  s.hold("sajdah", 800);
+  assert.equal(s.counter.sajdahs, 2);
+  assert.equal(s.counter.phase, "exit");
+
+  // Stand up for Rakat 2
+  s.hold("standing", 500);
+  assert.equal(s.counter.rakats.length, 1, "Rakat 1 must be completed and recorded");
+  assert.equal(s.counter.rakats[0].quality, "sequence-observed");
+  assert.equal(s.counter.phase, "bow", "Rakat 2 begins in Qiyam waiting for ruku");
 });

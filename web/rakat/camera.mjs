@@ -798,8 +798,8 @@ function loop(time) {
           }
           const stable = sample && (!baseline ||
             (sample.mode === baseline.mode &&
-             (!Number.isFinite(sample.hipY) || Math.abs(sample.hipY - baseline.hipY) < 0.06) &&
-             Math.abs(sample.headY - baseline.headY) < 0.06));
+             (!Number.isFinite(sample.hipY) || Math.abs(sample.hipY - baseline.hipY) < 0.08) &&
+             Math.abs(sample.headY - baseline.headY) < 0.08));
           if (!stable) {
             if (sample) calibrationUnstableFrames++;
             calibrationSince = null;
