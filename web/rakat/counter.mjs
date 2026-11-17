@@ -1,5 +1,13 @@
 export const POSTURES = ["standing", "bow", "sajdah", "sitting", "unknown"];
 
+export const DEFAULT_MAT_CALIBRATION = {
+  mode: "mat",
+  headY: 0.22,
+  shoulderY: 0.40,
+  torsoSpan: 0.18,
+  faceScale: 0.15,
+};
+
 // Adaptive counts can be pair-based estimates; only observed phases are verified.
 export class RakatCounter {
   constructor(target = 2, options = {}) {

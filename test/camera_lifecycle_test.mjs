@@ -10,6 +10,7 @@ import {
   detectOrientation,
   diagnosePlacement,
   selectPrimaryPose,
+  DEFAULT_MAT_CALIBRATION,
 } from "../web/rakat/counter.mjs";
 import { LightingMonitor } from "../web/rakat/lighting.mjs";
 import { PoseEvidence, readNativeSensors, deviceIsMoving, sensorOrientation } from "../web/rakat/sensors.mjs";
@@ -90,7 +91,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
     console: { error() {} },
   });
   const counterModule = new vm.SyntheticModule(
-    ["RakatCounter", "standingCalibration", "classifyPose", "adaptiveCalibration", "detectOrientation", "diagnosePlacement", "selectPrimaryPose"],
+    ["RakatCounter", "standingCalibration", "classifyPose", "adaptiveCalibration", "detectOrientation", "diagnosePlacement", "selectPrimaryPose", "DEFAULT_MAT_CALIBRATION"],
     function () {
       this.setExport("RakatCounter", class extends RakatCounter {
         constructor(...args) {
@@ -104,6 +105,7 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
       this.setExport("detectOrientation", detectOrientation);
       this.setExport("diagnosePlacement", diagnosePlacement);
       this.setExport("selectPrimaryPose", selectPrimaryPose);
+      this.setExport("DEFAULT_MAT_CALIBRATION", DEFAULT_MAT_CALIBRATION);
     }, { context },
   );
   const mediaModule = new vm.SyntheticModule(["FilesetResolver", "PoseLandmarker"], function () {
@@ -667,4 +669,34 @@ test("frozen camera cannot advance from proximity, and exit paths release native
     assert.equal(app.sensorRequests.at(-1), false, reason);
     assert.ok(app.tracks.every(track => track.ended), reason);
   }
+});
+
+test("Start on Mat button immediately activates floor mat tracking without standing calibration", async () => {
+  const app = await harness();
+  app.element("placement").value = "mat";
+  await app.click("start");
+  assert.equal(app.element("start-mat").hidden, false);
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  await app.click("start-mat");
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  assert.match(app.element("status").textContent, /Floor mat tracking active/);
+  assert.equal(app.element("start-mat").hidden, true);
+  app.click("stop");
+});
+
+test("Floor prostration during mat calibration auto-activates tracking and does not trap on Alert A", async () => {
+  const app = await harness();
+  app.element("placement").value = "mat";
+  await app.click("start");
+  app.element("video").currentTime++;
+  app.frame(100);
+  assert.match(app.element("status").textContent, /Start on Mat/);
+  assert.match(app.element("session-state").textContent, /Setup in progress/);
+  // User prostrates directly on floor over the camera
+  app.setPoses([buildSyntheticPose({ headY: 0.72, shoulderY: 0.65 })]);
+  app.element("video").currentTime++;
+  app.frame(200);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  assert.match(app.element("status").textContent, /Floor mat tracking active/);
+  app.click("stop");
 });

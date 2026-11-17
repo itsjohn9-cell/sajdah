@@ -1,8 +1,10 @@
 import {
   RakatCounter,
   standingCalibration,
+  classifyPose,
   diagnosePlacement,
   selectPrimaryPose,
+  DEFAULT_MAT_CALIBRATION,
 } from "./counter.mjs";
 import { LightingMonitor } from "./lighting.mjs";
 import { PoseEvidence, readNativeSensors, deviceIsMoving, sensorOrientation } from "./sensors.mjs";
@@ -558,6 +560,9 @@ function render() {
   $("calibrate").disabled = !stream;
   $("resume").disabled = !stream || !calibration || !counter.paused;
   $("undo").disabled = counter.rakats.length === 0;
+  if ($("start-mat")) {
+    $("start-mat").hidden = !stream || !calibrating || $("placement")?.value !== "mat";
+  }
   lightButton.disabled = !stream;
   video.hidden = !stream;
   $("camera-placeholder").hidden = Boolean(stream);
@@ -688,7 +693,22 @@ function beginCalibration() {
   calibrating = true;
   restartCurrentTracking();
   calibMultipleFrames = multipleFrames = multipleClearFrames = 0;
-  status("Stand upright in the camera view and keep the phone still for 1.5 seconds. Flat-mat mode can use an upper-body view.");
+  if ($("placement")?.value === "mat") {
+    status("Setup: one person must be visible and upright, or tap 'Start on Mat' for floor-mat tracking.");
+  } else {
+    status("Stand upright in the camera view and keep the phone still for 1.5 seconds. Flat-mat mode can use an upper-body view.");
+  }
+}
+
+function startMatTracking() {
+  if (!stream || !calibrating) return;
+  calibration = { ...DEFAULT_MAT_CALIBRATION };
+  calibrationPitch = devicePitch;
+  calibrationRoll = deviceRoll;
+  calibrating = false;
+  counter.hasStood = true;
+  status("Floor mat tracking active. Stand to begin prayer.");
+  render();
 }
 
 function loop(time) {
@@ -753,46 +773,64 @@ function loop(time) {
         } else {
           calibMultipleFrames = 0;
         }
-        const sample = standingCalibration(points, {
-          allowAdaptive: true, orientation, mode: $("placement").value === "mat" ? "mat" : undefined,
-        });
-        if (!sample) {
-          if (points) calibrationNotUprightFrames++;
-          else calibrationNoPoseFrames++;
-        }
-        const stable = sample && (!baseline ||
-          (sample.mode === baseline.mode &&
-           (!Number.isFinite(sample.hipY) || Math.abs(sample.hipY - baseline.hipY) < 0.06) &&
-           Math.abs(sample.headY - baseline.headY) < 0.06));
-        if (!stable) {
-          if (sample) calibrationUnstableFrames++;
-          calibrationSince = null;
-          baseline = null;
-          let guidance = "";
-          const diag = diagnosePlacement({
-            points,
-            numPoses: result.landmarks.length,
-            lightingCondition: lightingMonitor.condition,
-            orientation,
-            pitch: devicePitch,
-            timeSinceLastDetection: time - lastPoseTime,
-          });
-          if (diag) guidance = ` Fix: ${diag.fix}`;
-          status(`Setup: one person must be visible and upright. Keep head and shoulders in view; adjust distance, camera tilt or lighting.${guidance}`);
-        } else {
-          calibrationPoseFrames++;
-          if (calibrationSince === null) { calibrationSince = time; baseline = sample; }
-          status("Standing visible. Hold still for calibration...");
-          if (time - calibrationSince >= 1500) {
-            calibration = baseline;
+
+        // If in mat mode and user is already prostrating, auto-activate floor tracking
+        if (($("placement").value === "mat" || orientation === "flat") && points) {
+          const poseNow = classifyPose(points, DEFAULT_MAT_CALIBRATION);
+          if (poseNow === "sajdah") {
+            calibration = { ...DEFAULT_MAT_CALIBRATION };
             calibrationPitch = devicePitch;
             calibrationRoll = deviceRoll;
             calibrating = false;
-            status("Calibrated. Stand upright to begin tracking.");
+            counter.hasStood = true;
+            status("Floor mat tracking active. Prostration detected.");
             render();
           }
         }
-        render();
+
+        if (calibrating) {
+          const sample = standingCalibration(points, {
+            allowAdaptive: true, orientation, mode: $("placement").value === "mat" ? "mat" : undefined,
+          });
+          if (!sample) {
+            if (points) calibrationNotUprightFrames++;
+            else calibrationNoPoseFrames++;
+          }
+          const stable = sample && (!baseline ||
+            (sample.mode === baseline.mode &&
+             (!Number.isFinite(sample.hipY) || Math.abs(sample.hipY - baseline.hipY) < 0.06) &&
+             Math.abs(sample.headY - baseline.headY) < 0.06));
+          if (!stable) {
+            if (sample) calibrationUnstableFrames++;
+            calibrationSince = null;
+            baseline = null;
+            let guidance = "";
+            const diag = diagnosePlacement({
+              points,
+              numPoses: result.landmarks.length,
+              lightingCondition: lightingMonitor.condition,
+              orientation,
+              pitch: devicePitch,
+              timeSinceLastDetection: time - lastPoseTime,
+            });
+            if (diag) guidance = ` Fix: ${diag.fix}`;
+            const matTip = ($("placement").value === "mat" || orientation === "flat") ? " Tap 'Start on Mat' for floor-mat tracking." : "";
+            status(`Setup: one person must be visible and upright. Keep head and shoulders in view; adjust distance, camera tilt or lighting.${matTip}${guidance}`);
+          } else {
+            calibrationPoseFrames++;
+            if (calibrationSince === null) { calibrationSince = time; baseline = sample; }
+            status("Standing visible. Hold still for calibration...");
+            if (time - calibrationSince >= 1500) {
+              calibration = baseline;
+              calibrationPitch = devicePitch;
+              calibrationRoll = deviceRoll;
+              calibrating = false;
+              status("Calibrated. Stand upright to begin tracking.");
+              render();
+            }
+          }
+          render();
+        }
       } else if (counter.paused && !counter.complete &&
                  counter.reason === "Multiple people detected. Only one person should be in camera view." &&
                  calibration) {
@@ -892,6 +930,7 @@ function loop(time) {
 }
 
 $("start").addEventListener("click", start);
+$("start-mat")?.addEventListener("click", startMatTracking);
 lightButton.addEventListener("click", () => {
   if (stream) setScreenLight(!screenLight);
 });
