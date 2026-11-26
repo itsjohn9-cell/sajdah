@@ -6,8 +6,13 @@ import {
   selectPrimaryPose,
   DEFAULT_MAT_CALIBRATION,
 } from "./counter.mjs";
-import { LightingMonitor } from "./lighting.mjs";
-import { PoseEvidence, readNativeSensors, deviceIsMoving, sensorOrientation } from "./sensors.mjs";
+import { LightingMonitor, computeMeanLuminance } from "./lighting.mjs";
+import {
+  PoseEvidence,
+  MotionStabilityFilter,
+  readNativeSensors,
+  sensorOrientation,
+} from "./sensors.mjs";
 
 const ALGORITHM_VERSION = "sensor-assisted-v3";
 
@@ -198,6 +203,7 @@ lightCanvas.height = 24;
 let lightContext = null;
 let lightingMonitor = new LightingMonitor();
 let lastLightSample = null;
+let lastLuminance = null;
 let lightingFailed = false;
 let screenLight = false;
 let orientation = "unknown";
@@ -209,6 +215,8 @@ let latestSensors = {};
 let sensorError = "";
 let lastEvidence = { posture: "unknown", source: "none", released: false };
 const poseEvidence = new PoseEvidence();
+const motionFilter = new MotionStabilityFilter(300);
+let matStartedAt = 0;
 let calibrationPitch = null;
 let calibrationRoll = null;
 let lastPoseTime = 0;
@@ -302,6 +310,8 @@ function resetFeedbackDiagnostics() {
 
 function resetEvidence() {
   poseEvidence.reset();
+  motionFilter.reset();
+  lastLuminance = null;
   lastEvidence = { posture: "unknown", source: "none", released: false };
 }
 
@@ -487,26 +497,39 @@ function setScreenLight(enabled) {
     : "Screen light off. This can help nearby, but cannot guarantee tracking in darkness. Uses extra battery.";
 }
 
-function sampleLighting(time) {
-  if (lightingFailed || (lastLightSample !== null && time - lastLightSample < 1000)) return;
-  lastLightSample = time;
+function sampleFrameLuminance(time, forcePerFrame = false) {
+  if (lightingFailed) return null;
+  const due1Hz = lastLightSample === null || time - lastLightSample >= 1000;
+  if (!forcePerFrame && !due1Hz) return lastLuminance;
   try {
     lightContext ??= lightCanvas.getContext("2d", { willReadFrequently: true });
     if (!lightContext) throw new Error("Preview sampling is unavailable.");
     lightContext.drawImage(video, 0, 0, 32, 24);
-    const condition = lightingMonitor.observe(lightContext.getImageData(0, 0, 32, 24).data);
-    if (calibrating && baselineCondition === null) {
-      baselineCondition = condition;
+    const pixels = lightContext.getImageData(0, 0, 32, 24).data;
+    const lum = computeMeanLuminance(pixels);
+    lastLuminance = lum;
+    if (due1Hz) {
+      lastLightSample = time;
+      const condition = lightingMonitor.observe(pixels);
+      if (calibrating && baselineCondition === null) {
+        baselineCondition = condition;
+      }
+      if (lightingStatus) {
+        lightingStatus.textContent = condition === "dim"
+          ? "Low-light warning: the preview is mostly dark. Try the optional screen light or a room light. If tracking stays uncertain, use manual counting."
+          : condition === "uneven"
+            ? "Uneven-light warning: a bright background may hide your body. Turn toward a light or adjust placement."
+            : "Preview lighting check only: no persistent dark-frame warning. This does not confirm your body is visible or counting is accurate.";
+      }
     }
-    lightingStatus.textContent = condition === "dim"
-      ? "Low-light warning: the preview is mostly dark. Try the optional screen light or a room light. If tracking stays uncertain, use manual counting."
-      : condition === "uneven"
-        ? "Uneven-light warning: a bright background may hide your body. Turn toward a light or adjust placement."
-        : "Preview lighting check only: no persistent dark-frame warning. This does not confirm your body is visible or counting is accurate.";
+    return lum;
   } catch (error) {
     console.error("Sijda lighting check failed", error);
     lightingFailed = true;
-    lightingStatus.textContent = "Lighting check unavailable. Inspect the preview yourself; no lighting quality is being assumed.";
+    if (lightingStatus) {
+      lightingStatus.textContent = "Lighting check unavailable. Inspect the preview yourself; no lighting quality is being assumed.";
+    }
+    return null;
   }
 }
 
@@ -514,27 +537,38 @@ function recordTransition(time, posture) {
   firstObservation ??= time;
   const last = transitions.at(-1);
   if (!last || last.posture !== posture || last.phase !== counter.phase ||
-      last.paused !== counter.paused) {
+      last.paused !== counter.paused || last.source !== (lastEvidence.source || "none")) {
     if (transitions.length < 500) transitions.push({
       elapsedMs: Math.round(time - firstObservation), posture, phase: counter.phase,
       paused: counter.paused, rakat: counter.rakats.length, sajdahs: counter.sajdahs,
+      source: lastEvidence.source || "none",
     });
   }
 }
 
-const phaseLabels = {
-  standing: "Stand upright to begin the current rakat.",
-  bow: "Standing detected. Waiting for ruku.",
-  upright: "Ruku detected. Waiting for standing.",
-  firstSajdah: "Waiting for first sajdah.",
-  between: "First sajdah detected. Waiting for sitting.",
-  secondSajdah: "Release detected. Waiting for second sajdah; sitting is verified only when visible.",
-  exit: "Second sajdah detected. Waiting for sitting or standing.",
-};
+function phaseLabelFor(phase) {
+  if (phase === "bow") {
+    return (calibration?.mode === "mat" || counter.matMode)
+      ? "Mat tracking active. Waiting for ruku or sajdah."
+      : "Standing detected. Waiting for ruku.";
+  }
+  if (phase === "secondSajdah") {
+    return counter.observed?.jalsah
+      ? "Sitting detected. Waiting for second sajdah."
+      : "Release detected. Waiting for second sajdah; sitting is verified only when visible.";
+  }
+  return {
+    standing: "Stand upright to begin the current rakat.",
+    upright: "Ruku detected. Waiting for standing.",
+    firstSajdah: "Waiting for first sajdah.",
+    between: "First sajdah detected. Waiting for sitting or brightening.",
+    exit: "Second sajdah detected. Waiting for sitting or standing.",
+  }[phase] || "";
+}
 
 function status(message) {
   statusText = String(message);
-  $("status").textContent = statusText;
+  if ($("status")) $("status").textContent = statusText;
 }
 
 function pauseForInterruption(reason) {
@@ -555,13 +589,13 @@ function render() {
   }));
   $("stop").disabled = !stream && !starting;
   $("start").disabled = Boolean(stream) || starting || counter.complete;
-  $("target").disabled = Boolean(stream) || starting || counter.rakats.length > 0 || counter.phase !== "standing";
+  $("target").disabled = Boolean(stream) || starting || counter.rakats.length > 0 || counter.sajdahs > 0;
   $("placement").disabled = $("target").disabled;
   $("calibrate").disabled = !stream;
   $("resume").disabled = !stream || !calibration || !counter.paused;
   $("undo").disabled = counter.rakats.length === 0;
   if ($("start-mat")) {
-    $("start-mat").hidden = !stream || !calibrating || $("placement")?.value !== "mat";
+    $("start-mat").hidden = !stream || !calibrating;
   }
   lightButton.disabled = !stream;
   video.hidden = !stream;
@@ -577,7 +611,7 @@ function render() {
       Number.isFinite(latestSensors.lux) && latestSensors.lux < 10
         ? " Low ambient-light reading; inspect the preview or add room light." : ""}`;
   $("evidence-status").textContent = `Current evidence: ${lastEvidence.source}${
-    lastEvidence.released ? " · proximity release; sitting unverified" : ""}. Recognition filters: 200 ms raised posture, 400 ms sajdah; shorter movements may be missed.`;
+    lastEvidence.released ? " · release detected; sitting unverified" : ""}. Recognition filters: 200 ms raised posture, 400 ms sajdah; shorter movements may be missed.`;
   $("enable-motion").hidden = Boolean(window.SijdaSensors);
   $("enable-motion").disabled = !stream;
   $("session-state").textContent = counter.complete
@@ -587,6 +621,28 @@ function render() {
         : calibrating ? "Setup in progress. Counting starts only after calibration."
           : counter.paused ? "Tracking paused. No new counts are being added."
             : "Tracking active. Counts below are estimates; review after your test.";
+
+  // Live Testing HUD strip
+  if ($("hud-posture")) $("hud-posture").textContent = lastEvidence.posture || "unknown";
+  if ($("hud-phase")) $("hud-phase").textContent = counter.phase;
+  if ($("hud-light")) {
+    const lum = lastEvidence.luminance ?? lastLuminance;
+    const base = lastEvidence.baseline;
+    if (Number.isFinite(lum) && Number.isFinite(base) && base > 0) {
+      $("hud-light").textContent = `${Math.round(lum)}/${Math.round(base)} (${Math.round((lum / base) * 100)}%)`;
+    } else if (Number.isFinite(lum)) {
+      $("hud-light").textContent = `${Math.round(lum)}`;
+    } else {
+      $("hud-light").textContent = "--";
+    }
+  }
+  if ($("hud-sensor")) {
+    const proxText = typeof latestSensors.proximity === "boolean"
+      ? (latestSensors.proximity ? "NEAR" : "far")
+      : "off";
+    $("hud-sensor").textContent = `prox:${proxText} · src:${lastEvidence.source || "none"}`;
+  }
+
   if (typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
     const badges = document.querySelectorAll(".flow-badge");
     const phaseIndex = {
@@ -605,6 +661,7 @@ function stop(message = "Camera stopped. Review your estimates before continuing
   setSensorsEnabled(false);
   latestSensors = {};
   browserOrientation = browserMotion = null;
+  calibrationPitch = calibrationRoll = null;
   resetEvidence();
   lightingStatus.textContent = "Lighting check off. Camera frames are sampled only on-device while tracking.";
   generation++;
@@ -633,6 +690,8 @@ async function start() {
   render();
   status("Loading the on-device pose model and requesting the front camera...");
   try {
+    const isMatPlacement = $("placement")?.value === "mat";
+    const minConfidence = isMatPlacement ? 0.45 : 0.65;
     const { FilesetResolver, PoseLandmarker } = await import("../vendor/mediapipe/vision_bundle.mjs");
     if (token !== generation) return;
     const files = await FilesetResolver.forVisionTasks("../vendor/mediapipe/wasm");
@@ -641,9 +700,9 @@ async function start() {
       baseOptions: { modelAssetPath: "../vendor/mediapipe/pose_landmarker_lite.task", delegate: "CPU" },
       runningMode: "VIDEO",
       numPoses: 2,
-      minPoseDetectionConfidence: 0.65,
-      minPosePresenceConfidence: 0.65,
-      minTrackingConfidence: 0.65,
+      minPoseDetectionConfidence: minConfidence,
+      minPosePresenceConfidence: minConfidence,
+      minTrackingConfidence: minConfidence,
     });
     if (token !== generation) { loaded.close(); return; }
     detector = loaded;
@@ -667,15 +726,21 @@ async function start() {
     cameraStartedAt ??= performance.now();
     sensorError = "";
     setSensorsEnabled(true);
+    getSensorData(cameraStartedAt);
     startRecording(stream);
     starting = false;
     lastVideoTime = -1;
     lastInference = 0;
     frameWaitSince = null;
     lastLightSample = null;
+    lastLuminance = null;
     lightingFailed = false;
     lightingMonitor = new LightingMonitor();
-    beginCalibration();
+    if (isMatPlacement) {
+      activateMatTracking("Floor mat tracking active. Pray naturally — tracking starts now.");
+    } else {
+      beginCalibration();
+    }
     render();
     frame = requestAnimationFrame(loop);
   } catch (error) {
@@ -686,11 +751,28 @@ async function start() {
   }
 }
 
+function activateMatTracking(message = "Floor mat tracking active. Pray naturally — tracking starts now.") {
+  calibration = { ...DEFAULT_MAT_CALIBRATION, matAutoStart: true };
+  calibrationPitch = devicePitch;
+  calibrationRoll = deviceRoll;
+  calibrating = false;
+  calibrationSince = null;
+  baseline = null;
+  matStartedAt = performance.now();
+  motionFilter.reset();
+  poseEvidence.reset();
+  counter.beginMatMode();
+  previousRakatCount = counter.rakats.length;
+  previousSajdahCount = counter.rakats.length * 2 + counter.sajdahs;
+  status(message);
+}
+
 function beginCalibration() {
   calibration = null;
   baseline = null;
   calibrationSince = null;
   calibrating = true;
+  motionFilter.reset();
   restartCurrentTracking();
   calibMultipleFrames = multipleFrames = multipleClearFrames = 0;
   if ($("placement")?.value === "mat") {
@@ -702,12 +784,7 @@ function beginCalibration() {
 
 function startMatTracking() {
   if (!stream || !calibrating) return;
-  calibration = { ...DEFAULT_MAT_CALIBRATION };
-  calibrationPitch = devicePitch;
-  calibrationRoll = deviceRoll;
-  calibrating = false;
-  counter.hasStood = true;
-  status("Floor mat tracking active. Stand to begin prayer.");
+  activateMatTracking("Floor mat tracking active. Pray naturally — tracking starts now.");
   render();
 }
 
@@ -730,7 +807,8 @@ function loop(time) {
     if (video.readyState >= 2 && video.currentTime !== lastVideoTime && time - lastInference >= 100) {
       lastVideoTime = video.currentTime;
       lastInference = time;
-      sampleLighting(time);
+      const isMatActive = calibration?.mode === "mat" || $("placement")?.value === "mat";
+      const luminance = sampleFrameLuminance(time, isMatActive);
       const result = detector.detectForVideo(video, time);
       const { pose: points, isMultiple } = selectPrimaryPose(result.landmarks);
       cameraFrames++;
@@ -738,10 +816,14 @@ function loop(time) {
       if (points) poseFrames++;
       else noPoseFrames++;
       const sensorData = getSensorData(time);
+      if (calibration && !calibrating) {
+        if (calibrationPitch === null && Number.isFinite(devicePitch)) calibrationPitch = devicePitch;
+        if (calibrationRoll === null && Number.isFinite(deviceRoll)) calibrationRoll = deviceRoll;
+      }
       const changedAngle = calibration && Number.isFinite(calibrationPitch) && Number.isFinite(devicePitch) &&
         (Math.abs(devicePitch - calibrationPitch) > 15 ||
           (Number.isFinite(deviceRoll) && Number.isFinite(calibrationRoll) && Math.abs(deviceRoll - calibrationRoll) > 15));
-      if (deviceIsMoving(sensorData) || changedAngle) {
+      if (motionFilter.isSustainedMotion(sensorData, changedAngle, time)) {
         resetEvidence();
         calibrationSince = null;
         baseline = null;
@@ -870,7 +952,12 @@ function loop(time) {
           multipleFrames = 0;
         }
         if (points) lastPoseTime = time;
-        lastEvidence = poseEvidence.observe(points, calibration, sensorData, time);
+        const settled = calibration?.mode === "mat" ? (time - matStartedAt >= 1000) : true;
+        lastEvidence = poseEvidence.observe(points, calibration, {
+          ...sensorData,
+          luminance,
+          settled,
+        }, time);
         const { posture } = lastEvidence;
         if (posture === "unknown") {
           unknownFrames++;
@@ -897,7 +984,8 @@ function loop(time) {
         let guidance = "";
         const isProstrating = posture === "sajdah" || counter.phase === "firstSajdah" ||
           counter.phase === "between" || counter.phase === "secondSajdah";
-        if (counter.paused || (posture === "unknown" && !isProstrating) || time - lastPoseTime > 1500) {
+        if (counter.paused || (posture === "unknown" && !isProstrating && !counter.matMode) ||
+            (!counter.matMode && time - lastPoseTime > 1500)) {
           const diag = diagnosePlacement({
             points,
             numPoses: result.landmarks.length,
@@ -912,9 +1000,11 @@ function loop(time) {
         }
         status(counter.paused ? `${counter.reason}${guidance}` :
           counter.complete ? "Session target reached. Stop camera and review estimates." :
-          posture === "unknown" ? (lastEvidence.released ? "Proximity release detected; sitting posture unverified."
-            : `Tracking uncertain. No posture is being assumed.${guidance}`) :
-          phaseLabels[counter.phase]);
+          posture === "unknown" ? (lastEvidence.released
+            ? `${lastEvidence.source === "occlusion" ? "Brightening" : "Proximity"} release detected; sitting posture unverified.`
+            : counter.matMode ? phaseLabelFor(counter.phase)
+              : `Tracking uncertain. No posture is being assumed.${guidance}`) :
+          phaseLabelFor(counter.phase));
         render();
         if (counter.complete) {
           stop("Session target reached. Camera stopped. Review each rakat estimate.");
@@ -942,14 +1032,24 @@ $("calibrate").addEventListener("click", () => {
 });
 $("resume").addEventListener("click", () => {
   restartCurrentTracking();
-  status("Partial detections cleared. Stand upright to restart the current rakat.");
+  status(counter.matMode
+    ? "Partial detections cleared. Mat tracking resumed."
+    : "Partial detections cleared. Stand upright to restart the current rakat.");
   render();
 });
 $("undo").addEventListener("click", () => {
   if (!confirm("Remove the last estimated rakat and clear current partial detections?")) return;
   counter.undoRakat();
-  if (stream) beginCalibration();
-  status("Last estimate removed. Calibrate standing before continuing.");
+  if (stream) {
+    if ($("placement")?.value === "mat") {
+      activateMatTracking("Last estimate removed. Mat tracking resumed.");
+    } else {
+      beginCalibration();
+      status("Last estimate removed. Calibrate standing before continuing.");
+    }
+  } else {
+    status("Last estimate removed.");
+  }
   render();
 });
 $("reset").addEventListener("click", () => {
@@ -961,6 +1061,8 @@ $("reset").addEventListener("click", () => {
   interruptions = 0;
   transitions.length = 0;
   firstObservation = null;
+  lastLuminance = null;
+  matStartedAt = 0;
   resetFeedbackDiagnostics();
   status("New session. Enable the front camera when ready.");
   render();
@@ -1001,7 +1103,7 @@ window.addEventListener("message", event => {
       event.data === "sijda-stop-camera") stop("Camera stopped after leaving the rakat screen.");
 });
 window.addEventListener("resize", () => {
-  if (stream && !calibrating) {
+  if (stream && !calibrating && calibration?.mode !== "mat") {
     pauseForInterruption("View changed. Recalibrate before continuing.");
     calibration = null;
     status(counter.reason);
@@ -1010,9 +1112,16 @@ window.addEventListener("resize", () => {
 });
 
 export function openReviewPanel() {
-  const panel = $("quick-review");
-  if (!panel) return;
-  panel.hidden = false;
+  const section = $("feedback-section");
+  if (section) {
+    section.hidden = false;
+    section.open = true;
+    const summaryEl = typeof document !== "undefined" && typeof document.querySelector === "function"
+      ? document.querySelector(".session-summary") : null;
+    if (section.style) {
+      section.style.scrollMarginTop = `${(summaryEl?.offsetHeight || 0) + 12}px`;
+    }
+  }
   const comp = $("review-comparison");
   if (comp) {
     comp.textContent = `Sajdah detected: ${counter.rakats.length} rakat(s) and ${counter.sajdahs} partial sajdah(s).`;
@@ -1024,20 +1133,20 @@ export function openReviewPanel() {
       timelineEl.textContent = "No posture transitions recorded yet.";
     } else {
       timelineEl.textContent = transitions.map(t =>
-        `+${(t.elapsedMs / 1000).toFixed(1)}s: ${t.posture.padEnd(8)} (phase: ${t.phase.padEnd(12)}, rakat: ${t.rakat}, sajdahs: ${t.sajdahs})`
+        `+${(t.elapsedMs / 1000).toFixed(1)}s: ${t.posture.padEnd(8)} [${(t.source || "none").padEnd(9)}] (phase: ${t.phase.padEnd(12)}, rakat: ${t.rakat}, sajdahs: ${t.sajdahs})`
       ).join("\n");
     }
   }
   if (countEl) countEl.textContent = String(transitions.length);
-  if (typeof panel.scrollIntoView === "function") {
-    panel.scrollIntoView({ behavior: "smooth" });
+  if (section && typeof section.scrollIntoView === "function") {
+    section.scrollIntoView({ behavior: "smooth" });
   }
 }
 
 const doneReviewBtn = $("done-review");
 if (doneReviewBtn) {
   doneReviewBtn.addEventListener("click", () => {
-    stop("Session finished for review. Check your test results below.");
+    if (stream || starting) stop("Session finished for review. Check your test results below.");
     openReviewPanel();
   });
 }

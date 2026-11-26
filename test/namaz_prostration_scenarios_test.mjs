@@ -898,3 +898,44 @@ test("Regression: phone on floor/mat records standing upright worshipper, starts
   assert.equal(s.counter.rakats[0].quality, "sequence-observed");
   assert.equal(s.counter.phase, "bow", "Rakat 2 begins in Qiyam waiting for ruku");
 });
+
+test("Regression: Flat-on-Mat 2-rakat prayer completes without standing in frame via PoseEvidence + occlusion", async () => {
+  const { PoseEvidence } = await import("../web/rakat/sensors.mjs");
+  const evidence = new PoseEvidence();
+  const counter = new RakatCounter(2, { adaptive: true, matMode: true });
+  let time = 0;
+
+  const step = (points, sensors, durationMs) => {
+    for (let elapsed = 0; elapsed <= durationMs; elapsed += 100) {
+      time += 100;
+      const sig = evidence.observe(points, DEFAULT_MAT_CALIBRATION, { ...sensors, settled: time >= 1000 }, time);
+      counter.observe(sig.posture, time, sig);
+    }
+  };
+
+  // Establish bright ceiling baseline for 1.5s while out of frame in Qiyam
+  step(null, { luminance: 150 }, 1500);
+  // Stay out of frame in Qiyam for 20s
+  step(null, { luminance: 150 }, 20000);
+  assert.equal(counter.paused, false);
+  assert.equal(counter.phase, "bow");
+
+  for (let rakat = 0; rakat < 2; rakat++) {
+    // Wait >1.5s on Rakat 2 exit cooldown before next prostration
+    if (rakat > 0) step(null, { luminance: 150 }, 1600);
+    // Sajdah 1 (head covers flat camera -> luminance drops)
+    step(null, { luminance: 25 }, 800);
+    assert.equal(counter.sajdahs, 1);
+    // Rise to Jalsah (luminance brightens -> released)
+    step(null, { luminance: 150 }, 600);
+    // Sajdah 2 (luminance drops again)
+    step(null, { luminance: 25 }, 800);
+    assert.equal(counter.sajdahs, 2);
+    // Rise for Tashahhud / standing out of frame (luminance brightens)
+    step(null, { luminance: 150 }, 600);
+  }
+
+  assert.equal(counter.rakats.length, 2);
+  assert.equal(counter.complete, true);
+  assert.equal(counter.paused, false);
+});

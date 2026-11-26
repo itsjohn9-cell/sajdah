@@ -6,252 +6,295 @@
   <title>Sajdah - AI Prostration & Rakat Companion</title>
   <style>
     :root {
-      font: 16px system-ui, -apple-system, sans-serif;
+      font: 15px/1.4 system-ui, -apple-system, sans-serif;
       color: #142821;
       background: #fbf9f5;
       --primary: #0f4c3a;
       --primary-light: #165b47;
       --gold: #c5a059;
-      --gold-light: #e5c378;
-      --border: #e8e3d8;
+      --border: #e2ddd0;
+      --surface: #ffffff;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 14px; background: #fbf9f5; }
-    h2 { font-size: 1.25rem; margin-top: 0; color: var(--primary); font-weight: 700; }
-    p { line-height: 1.5; }
+    body { margin: 0 auto; max-width: 680px; padding: 10px 12px 28px; background: #fbf9f5; }
+    h1 { font-size: 1.15rem; margin: 0; color: var(--primary); font-weight: 700; }
+    h2 { font-size: 1.08rem; margin: 8px 0 6px; color: var(--primary); font-weight: 700; }
+    p { margin: 6px 0; line-height: 1.45; }
     button, select, input, textarea {
-      font: inherit; padding: 12px; border: 1px solid var(--border);
-      border-radius: 12px; background: white; color: var(--primary); min-height: 46px;
-      transition: all 0.2s ease;
+      font: inherit; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 10px; background: white; color: var(--primary); min-height: 44px;
+      transition: all 0.15s ease;
     }
     button { cursor: pointer; font-weight: 600; }
     button:disabled { opacity: .45; cursor: default; }
     button.primary {
       background: linear-gradient(135deg, var(--primary), var(--primary-light));
       color: white; border: none; font-weight: 600;
-      box-shadow: 0 4px 14px rgba(15, 76, 58, 0.2);
+      box-shadow: 0 3px 10px rgba(15, 76, 58, 0.18);
     }
-    button.primary:hover:not(:disabled) { opacity: 0.95; transform: translateY(-1px); }
-    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
-    .preview {
-      position: relative; background: #0c1c16; border-radius: 16px;
-      overflow: hidden; border: 1.5px solid rgba(197, 160, 89, 0.3);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    button.accent {
+      background: var(--gold); color: #0f172a; border: none; font-weight: 700;
     }
-    video { width: 100%; height: 175px; display: block; object-fit: contain; transform: scaleX(-1); }
-    video[hidden] { display: none; }
-    #camera-placeholder { color: #fbf9f5; text-align: center; padding: 24px; margin: 0; font-size: 0.95rem; }
-    #status {
-      padding: 14px; background: #eaf2ed; border-radius: 12px;
-      min-height: 56px; border: 1px solid #d4e5da; color: var(--primary); font-weight: 500;
+    button.rakat-opt.active {
+      background: var(--primary); color: white; border-color: var(--primary);
     }
-    #totals { font-size: 1.35rem; font-weight: 700; color: var(--primary); }
-    .warning { color: #8a481c; }
-    ol { padding-left: 24px; }
-    form { display: grid; gap: 12px; }
-    form label { display: grid; gap: 6px; font-weight: 500; }
-    input, select, textarea { max-width: 100%; }
-    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .consent { display: flex; align-items: flex-start; gap: 12px; }
-    #feedback-status { white-space: pre-wrap; }
-    .screen-light { background: white; }
-    body.screen-light { min-height: 100vh; }
-    .screen-light .preview video { max-height: 120px; }
-    .screen-light .setup-info { display: none; }
-    .screen-light #status { background: white; border: 1px solid var(--primary); }
-    #lighting-status, #screen-light-status { font-size: .88rem; }
     .session-summary {
-      position: sticky; top: 0; z-index: 2; background: #fbf9f5;
-      border-bottom: 2px solid var(--gold); padding: 10px 0;
+      position: sticky; top: 0; z-index: 4; background: #fbf9f5;
+      border-bottom: 2px solid var(--gold); padding: 6px 0 8px;
     }
-    .session-summary p { margin: 4px 0; }
-    .session-summary #totals { font-size: 1.25rem; }
-    .session-summary #status { min-height: 0; padding: 10px 12px; }
-    .screen-light .session-summary { background: white; }
-    .report-button { width: 100%; margin-top: 8px; }
-    summary { cursor: pointer; padding: 12px 0; font-weight: 600; color: var(--primary); }
-    #history:empty::after { content: "No completed rakat estimated in this session."; color: #6a7c73; }
-    #history { margin: 8px 0; }
+    .summary-top {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    }
+    .badge-warn {
+      font-size: 0.72rem; color: #8a481c; font-weight: 600;
+      background: #fdf3e7; padding: 2px 7px; border-radius: 999px; border: 1px solid #eed2ad;
+      white-space: nowrap;
+    }
+    #totals { font-size: 1.2rem; font-weight: 700; color: var(--primary); margin: 2px 0; }
+    #status {
+      padding: 8px 10px; background: #eaf2ed; border-radius: 9px;
+      border: 1px solid #d4e5da; color: var(--primary); font-weight: 500;
+      font-size: 0.92rem; margin: 4px 0;
+    }
+    #session-state { font-size: 0.8rem; color: #435b51; margin: 2px 0; }
     .namaz-flow-strip {
-      display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 12px 0;
+      display: flex; gap: 5px; overflow-x: auto; padding: 6px 0 2px;
       scrollbar-width: none;
     }
     .flow-badge {
-      padding: 6px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 600;
+      padding: 4px 8px; border-radius: 7px; font-size: 0.74rem; font-weight: 600;
       background: white; border: 1px solid var(--border); color: #435b51; white-space: nowrap;
     }
     .flow-badge.active {
       background: var(--primary); color: white; border-color: var(--primary);
     }
-    @media (max-width: 380px) {
-      button, select { padding: 9px; }
+    .preview-card {
+      margin: 10px 0 8px; background: #0c1c16; border-radius: 14px;
+      overflow: hidden; border: 1.5px solid rgba(197, 160, 89, 0.38);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    }
+    .preview { position: relative; }
+    video {
+      width: 100%; height: clamp(220px, 34vh, 330px);
+      display: block; object-fit: contain; transform: scaleX(-1); background: #0c1c16;
+    }
+    video[hidden] { display: none; }
+    #camera-placeholder {
+      color: #fbf9f5; text-align: center; padding: 48px 16px; margin: 0; font-size: 0.92rem;
+    }
+    .live-hud {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 4px; padding: 6px 8px; background: #102a21; color: #e8f3ee;
+      font-size: 0.74rem; border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .hud-cell { display: flex; flex-direction: column; min-width: 0; }
+    .hud-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; color: #b7d1c6; }
+    .hud-val { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .setup-selectors {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0;
+    }
+    .setup-selectors label {
+      display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; font-weight: 600; color: #435b51;
+    }
+    .primary-actions {
+      display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin: 8px 0;
+    }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+    .secondary-bar {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+      gap: 6px; margin: 8px 0;
+    }
+    .secondary-bar button { min-height: 40px; padding: 8px 10px; font-size: 0.85rem; }
+    .consent { display: flex; align-items: flex-start; gap: 10px; font-size: 0.86rem; }
+    .consent input { min-height: auto; margin-top: 3px; }
+    details.panel {
+      background: white; border: 1px solid var(--border); border-radius: 12px;
+      padding: 6px 12px; margin: 8px 0;
+    }
+    details.panel summary {
+      cursor: pointer; padding: 8px 0; font-weight: 600; color: var(--primary);
+    }
+    details#feedback-section {
+      border: 2px solid var(--primary);
+    }
+    #history { margin: 6px 0; padding-left: 20px; font-size: 0.88rem; }
+    #history:empty::after { content: "No completed rakat estimated in this session."; color: #6a7c73; }
+    form { display: grid; gap: 10px; margin-top: 8px; }
+    form label { display: grid; gap: 4px; font-weight: 500; font-size: 0.9rem; }
+    input, select, textarea { max-width: 100%; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .warning { color: #8a481c; font-size: 0.85rem; }
+    .muted { font-size: 0.82rem; color: #52665d; }
+    #feedback-status { white-space: pre-wrap; font-weight: 500; }
+    .screen-light { background: white; }
+    body.screen-light { min-height: 100vh; }
+    .screen-light .preview video { max-height: 180px; }
+    .screen-light .setup-info { display: none; }
+    .screen-light .session-summary { background: white; }
+    .screen-light #status { background: white; border: 1px solid var(--primary); }
+    @media (max-width: 420px) {
+      .live-hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .primary-actions { grid-template-columns: 1fr 1fr; }
+      #start { grid-column: 1 / -1; }
       .session-summary #totals { font-size: 1.05rem; }
     }
   </style>
 </head>
 <body>
-  <header style="text-align: center; margin-bottom: 12px;">
-    <h1 style="font-size: 1.45rem; margin: 0; color: #0f4c3a; letter-spacing: 0.5px;">Sajdah</h1>
-    <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: #c5a059; font-weight: 700; letter-spacing: 1.2px;">AI PROSTRATION & PRAYER COMPANION</p>
-  </header>
   <section class="session-summary" aria-label="Live session results">
+    <div class="summary-top">
+      <h1>Sajdah · Auto Rakat</h1>
+      <span class="badge-warn">Experimental estimates</span>
+    </div>
     <p id="totals" aria-live="polite">0 / 2 estimated rakat · 0 sajdahs in current rakat</p>
-    <p id="status" role="status">Camera off. Allow camera access only when you are ready.</p>
+    <p id="status" role="status">Camera off. Choose placement and tap Start.</p>
     <p id="session-state">Not tracking. No completed rakat estimated yet.</p>
-    <button id="review-feedback" class="primary report-button" type="button" aria-controls="feedback-section">
-      Report a counting problem
-    </button>
+    <div class="namaz-flow-strip" aria-label="Namaz prostration sequence">
+      <span class="flow-badge active">1. Qiyam</span>
+      <span class="flow-badge">2. Ruku'</span>
+      <span class="flow-badge">3. Qaumah</span>
+      <span class="flow-badge">4. Sajdah 1</span>
+      <span class="flow-badge">5. Jalsah</span>
+      <span class="flow-badge">6. Sajdah 2</span>
+    </div>
   </section>
-  <div class="namaz-flow-strip" aria-label="Namaz prostration sequence">
-    <span class="flow-badge active">1. Qiyam (Stand)</span>
-    <span class="flow-badge">2. Ruku' (Bow)</span>
-    <span class="flow-badge">3. Qaumah (Stand)</span>
-    <span class="flow-badge">4. Sajdah 1</span>
-    <span class="flow-badge">5. Jalsah (Sit)</span>
-    <span class="flow-badge">6. Sajdah 2</span>
+
+  <div class="preview-card">
+    <div class="preview">
+      <p id="camera-placeholder">Camera off. Tap Start Camera below. In Flat on Mat mode, tracking starts immediately.</p>
+      <video id="video" hidden playsinline muted disablepictureinpicture aria-label="Mirrored front camera preview"></video>
+    </div>
+    <div class="live-hud" aria-label="Live tracking telemetry">
+      <div class="hud-cell"><span class="hud-label">Posture</span><span class="hud-val" id="hud-posture">unknown</span></div>
+      <div class="hud-cell"><span class="hud-label">Phase</span><span class="hud-val" id="hud-phase">standing</span></div>
+      <div class="hud-cell"><span class="hud-label">Light / Base</span><span class="hud-val" id="hud-light">--</span></div>
+      <div class="hud-cell"><span class="hud-label">Sensor / Src</span><span class="hud-val" id="hud-sensor">prox:off · src:none</span></div>
+    </div>
   </div>
-  <p class="warning">Experimental estimates, not confirmation of prayer validity.</p>
-  <details>
-  <summary>Setup, limitations and privacy</summary>
-  <p><a href="https://itsjohn9-cell.github.io/sajdah/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
-    · Privacy/deletion: fehmatics@gmail.com</p>
-  <p class="setup-info">Keep this page open with the screen on. For flat-mat placement,
-    put the phone beside the prostration area with the front camera facing up, never under your forehead.
-    Check that standing, sitting and prostration produce different views. A propped view works too.
-    The camera is required; optional sensors assist but cannot confirm unseen prayer movements.</p>
-  <p>Fast movements are supported with short recognition windows: about 200 ms for raised
-    postures and 400 ms for sajdah. Shorter or obscured movements may be missed. These
-    are noise filters, not instructions about prayer timing. Unknown frames never count as a release.</p>
-  <p class="warning">Estimates only. Not validated for prayer use or all phones,
-    clothing or mobility needs. Only standard standing sequences are supported.
-    Review results; this does not determine prayer validity.</p>
-  </details>
-  <div class="controls">
-    <label for="target">Session target</label>
-    <select id="target"><option value="2">2 rakat</option><option value="3">3 rakat</option><option value="4">4 rakat</option></select>
-    <label for="placement">Camera placement</label>
-    <select id="placement"><option value="mat">Flat on mat</option><option value="auto">Propped / automatic</option></select>
-    <button id="start" class="primary">Enable front camera</button>
-    <button id="start-mat" class="primary" hidden style="background: #c5a059; color: #0f172a; font-weight: 700;">Start on Mat (Ready to pray)</button>
-    <button id="stop" disabled>Stop camera</button>
-    <button id="done-review" class="primary">Done / Review session</button>
+
+  <div class="setup-selectors">
+    <label for="target">Target
+      <select id="target"><option value="2">2 rakat</option><option value="3">3 rakat</option><option value="4">4 rakat</option></select>
+    </label>
+    <label for="placement">Placement
+      <select id="placement"><option value="mat">Flat on mat</option><option value="auto">Propped / automatic</option></select>
+    </label>
   </div>
-  <label class="consent" style="margin: 6px 0 12px 0; font-size: 0.9rem;">
-    <input type="checkbox" id="record-test-video" aria-describedby="diagnostic-video-privacy">
-    Record a diagnostic video locally (optional; off by default)
-  </label>
-  <p id="diagnostic-video-privacy">If enabled, a temporary video stays in this page until you download it or leave.
-    Sajdah never uploads this recording, and it is not included in feedback.</p>
-  <p id="recording-status" role="status">Diagnostic recording is off. No video is recorded or uploaded.</p>
-  <div class="preview">
-    <p id="camera-placeholder">Camera off. Tap Enable front camera to begin setup.</p>
-    <video id="video" hidden playsinline muted disablepictureinpicture aria-label="Mirrored front camera preview"></video>
+
+  <div class="primary-actions">
+    <button id="start" class="primary">Start camera</button>
+    <button id="stop" disabled>Stop</button>
+    <button id="done-review" class="accent" aria-controls="feedback-section">Done / Report Issue</button>
   </div>
-  <h2>Session results</h2>
-  <p id="sensor-status" role="status">Sensors off. Camera is required for counting.</p>
-  <p id="evidence-status">No posture evidence yet.</p>
-  <ol id="history" aria-label="Estimated rakat history"></ol>
-  <p>Full sequence observed means all phases were recognized by the camera, not confirmation of prayer validity.
-    Pair-based estimates list phases that were not visually verified. Stopping never completes a partial rakat.</p>
-  <p>Review these estimates before leaving this screen. Leaving clears the automatic session.</p>
-  <div class="controls">
-    <button id="enable-motion" disabled>Enable optional motion sensors</button>
+  <div class="controls" style="margin: 4px 0;">
+    <button id="start-mat" class="accent" hidden style="width: 100%;">Start on Mat immediately</button>
+  </div>
+
+  <div class="secondary-bar" aria-label="Session utilities">
     <button id="screen-light" aria-pressed="false" disabled>Turn screen light on</button>
+    <button id="undo" disabled>Undo rakat</button>
+    <button id="resume" disabled>Restart rakat</button>
+    <button id="reset">New session</button>
+    <button id="calibrate" disabled>Recalibrate</button>
+    <button id="enable-motion" disabled>Motion sensors</button>
   </div>
-  <p id="motion-status">Motion/orientation sensors detect a moved phone, not body movements.
-    Availability varies by device and browser; denying access does not prevent camera tracking.</p>
-  <p id="screen-light-status" role="status">Screen light off. This can help nearby, but cannot guarantee tracking in darkness. Uses extra battery.</p>
-  <p id="lighting-status" class="warning" role="status">Lighting check off. Camera frames are sampled only on-device while tracking.</p>
-  <div class="controls">
-    <button id="calibrate" disabled>Calibrate standing position</button>
-    <button id="resume" disabled>Restart current rakat</button>
-    <button id="undo" disabled>Undo last rakat</button>
-    <button id="reset">New automatic session</button>
-  </div>
-  <section id="quick-review" class="preview" style="background: white; border: 2px solid #176b58; padding: 14px; margin: 12px 0;" hidden>
-    <h2 style="color: #174e40; margin-bottom: 6px;">Test Session Review</h2>
-    <p id="review-comparison" style="font-size: 1.1rem; font-weight: 600; margin: 4px 0;">Sajdah detected: 0 rakat(s).</p>
-    <div style="margin: 12px 0;">
-      <p style="margin: 4px 0;"><strong>How many rakats did you actually pray?</strong></p>
+  <label class="consent" style="margin: 6px 0;">
+    <input type="checkbox" id="record-test-video" aria-describedby="diagnostic-video-privacy">
+    <span>Record diagnostic video locally (optional; off by default, never uploaded)</span>
+  </label>
+
+  <details class="panel">
+    <summary>Session log, sensors &amp; lighting details</summary>
+    <ol id="history" aria-label="Estimated rakat history"></ol>
+    <p id="sensor-status" class="muted" role="status">Sensors off. Camera is required for counting.</p>
+    <p id="evidence-status" class="muted">No posture evidence yet.</p>
+    <p id="lighting-status" class="warning" role="status">Lighting check off. Camera frames are sampled only on-device while tracking.</p>
+    <p id="screen-light-status" class="muted" role="status">Screen light off. This can help nearby, but cannot guarantee tracking in darkness. Uses extra battery.</p>
+    <p id="motion-status" class="muted">Motion/orientation sensors detect a moved phone, not body movements.</p>
+    <p id="recording-status" class="muted" role="status">Diagnostic recording is off. No video is recorded or uploaded.</p>
+  </details>
+
+  <details class="panel">
+    <summary>Setup, limitations &amp; privacy</summary>
+    <p><a href="https://itsjohn9-cell.github.io/sajdah/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+      · Privacy/deletion: fehmatics@gmail.com</p>
+    <p class="setup-info">Keep this page open with the screen on. For flat-mat placement,
+      put the phone beside the prostration area with the front camera facing up, never under your forehead.
+      Tracking starts immediately on Start; Qiyam can remain out of frame. A propped view works too.
+      The camera is required; optional sensors and overhead light drop assist but cannot confirm unseen prayer movements.</p>
+    <p>Fast movements are supported with short recognition windows: about 200 ms for raised
+      postures and 400 ms for sajdah. Unknown frames never count as a release.</p>
+    <p id="diagnostic-video-privacy">If enabled, a temporary diagnostic video stays in this page until you download it or leave.
+      Sajdah never uploads this recording, and camera/video, images, raw body landmarks, location, audio or unique device identifiers are not included in feedback.</p>
+    <p class="warning">Estimates only. Not validated for prayer use or all phones, clothing or mobility needs.
+      Pose detection runs locally (approx. 26 MB bundled model; HTTPS required on phones). Leaving clears this session and does not change qaza balances.</p>
+  </details>
+
+  <details id="feedback-section" class="panel">
+    <summary>Review session &amp; report issue</summary>
+    <p id="review-comparison" style="font-size: 1.02rem; font-weight: 700; color: var(--primary);">Sajdah detected: 0 rakat(s) and 0 partial sajdah(s).</p>
+    <div style="margin: 8px 0;">
+      <p style="margin: 4px 0;"><strong>1. How many rakats did you actually pray?</strong></p>
       <div class="controls" id="rakat-picker">
+        <button type="button" class="rakat-opt" data-rakat="0">0</button>
         <button type="button" class="rakat-opt" data-rakat="1">1 Rakat</button>
         <button type="button" class="rakat-opt" data-rakat="2">2 Rakats</button>
         <button type="button" class="rakat-opt" data-rakat="3">3 Rakats</button>
         <button type="button" class="rakat-opt" data-rakat="4">4 Rakats</button>
       </div>
+      <div id="quick-review-verdict" role="status" style="font-weight: 600; margin: 6px 0;" hidden></div>
     </div>
-    <div id="quick-review-verdict" role="status" style="font-weight: 600; margin: 8px 0;" hidden></div>
-    <div id="video-recording-container" hidden style="margin: 12px 0;">
-      <h3 style="font-size: 1.1rem; margin: 6px 0;">Diagnostic Video Recording</h3>
+
+    <div id="video-recording-container" hidden style="margin: 10px 0;">
+      <h3 style="font-size: 0.98rem; margin: 4px 0;">Diagnostic Video Recording</h3>
       <video id="diagnostic-video-player" controls playsinline style="max-height: 220px; width: 100%; border-radius: 8px; background: #000;"></video>
-      <div class="controls" style="margin-top: 8px;">
-        <a id="download-video-btn" download="sijda-prayer-test.webm" style="display: inline-block; padding: 10px 14px; background: #176b58; color: white; text-decoration: none; border-radius: 8px;">Download test video</a>
+      <div class="controls" style="margin-top: 6px;">
+        <a id="download-video-btn" download="sijda-prayer-test.webm" style="display: inline-block; padding: 9px 12px; background: #176b58; color: white; text-decoration: none; border-radius: 8px;">Download test video</a>
       </div>
     </div>
-    <details id="quick-timeline-details" style="margin: 8px 0;">
+
+    <details id="quick-timeline-details" style="margin: 6px 0;">
       <summary>Diagnostic Transition Log (<span id="timeline-count">0</span> events)</summary>
-      <pre id="timeline-log" style="font-size: 0.8rem; max-height: 180px; overflow-y: auto; background: #e4eee8; padding: 8px; border-radius: 6px;"></pre>
+      <pre id="timeline-log" style="font-size: 0.78rem; max-height: 180px; overflow-y: auto; background: #e4eee8; padding: 8px; border-radius: 6px;"></pre>
     </details>
-    <div class="controls" style="margin-top: 12px;">
-      <button id="quick-fill-feedback" class="primary">Open full feedback form</button>
-      <button id="close-quick-review">Close review</button>
-    </div>
-  </section>
-  <p class="setup-info">Start standing for calibration. The tracker then expects standing → ruku →
-    standing → sajdah → sitting → sajdah → sitting/standing.
-    A rakat estimate is added only after leaving the second sajdah.</p>
-  <p>Pose detection processes camera frames locally. Diagnostic video recording
-    is off by default; if enabled, it stays in this page unless you download it
-    and is never uploaded. Images are not included in feedback. The bundled
-    pose model loads from this app (about 26 MB with runtime files). HTTPS is
-    required on phones. Camera stops on Stop, leaving this screen, or hiding the
-    page. Sessions are not saved and do not change qaza balances. Motion sensors
-    cannot measure your body while the phone is stationary; proximity is not
-    generally available in browsers.</p>
-  <details id="feedback-section">
-    <summary>Report test results / placement feedback</summary>
-    <p>Stop the camera before filling this in. Device/app details and bounded tracking diagnostics are filled in
-    automatically when available. Counts and a limited posture-transition
-    log are included; camera/video, images, raw body landmarks, location,
-    audio and device identifiers are never uploaded. Feedback is saved
-    locally. Upload requires your consent for each report.
-    Do not include names, contact details or other sensitive information.</p>
+
+    <p class="muted">Stop the camera before submitting. Counts and a bounded posture-transition log are included; camera/video, images, raw body landmarks, location, audio and device identifiers are never uploaded. Upload requires your consent for each report.</p>
     <form id="feedback-form">
       <label>Was the count right?
         <select name="verdict" required>
           <option value="unsure">Unsure</option><option value="correct">Correct</option><option value="incorrect">Incorrect</option>
         </select>
       </label>
-      <label>Actual rakat you completed <input name="expectedRakat" type="number" min="0" max="100" step="1" required></label>
-      <label>Actual sajdahs you completed <input name="expectedSajdahs" type="number" min="0" max="200" step="1" required></label>
-      <p id="sajdah-count-hint">Automatically set to two sajdahs per rakat; edit for a partial prayer or correction.</p>
-      <label>Mobile placement
-        <select name="placement">        <option value="floor-tilted">On floor (flat mat or tilted)</option><option value="low-stand">Low phone stand</option><option value="chair">Chair height</option><option value="shelf">Shelf/table</option><option value="other">Other (describe below)</option></select>
-      </label>
+      <div class="setup-selectors">
+        <label>Actual rakat <input name="expectedRakat" type="number" min="0" max="100" step="1" required></label>
+        <label>Actual sajdahs <input name="expectedSajdahs" type="number" min="0" max="200" step="1" required></label>
+      </div>
+      <p id="sajdah-count-hint" class="muted">Auto-set to two sajdahs per rakat; edit for partial prayers.</p>
+      <div class="setup-selectors">
+        <label>Placement
+          <select name="placement"><option value="floor-tilted">On floor (flat mat or tilted)</option><option value="low-stand">Low phone stand</option><option value="chair">Chair height</option><option value="shelf">Shelf/table</option><option value="other">Other</option></select>
+        </label>
+        <label>Lighting <select name="lighting"><option value="normal">Normal</option><option value="bright">Bright</option><option value="dim">Dim</option></select></label>
+      </div>
       <label>Approximate distance
         <select name="distance"><option value="unknown">Not sure</option><option value="under-1m">Under 1 metre</option><option value="1-2m">1–2 metres</option><option value="over-2m">Over 2 metres</option></select>
       </label>
-      <label>Lighting <select name="lighting"><option value="normal">Normal</option><option value="bright">Bright</option><option value="dim">Dim</option></select></label>
       <label>Detected phone and app <input name="device" maxlength="120" placeholder="Detected automatically; edit if incorrect" required></label>
-      <label>What happened? Include whether screen light was on or off.
-        <textarea name="notes" rows="3" maxlength="1000" placeholder="Screen light on/off, room lighting, camera tilt, clothing, missing/double counts, which posture was missed..."></textarea></label>
+      <label>What happened?
+        <textarea name="notes" rows="3" maxlength="1000" placeholder="Screen light on/off, room lighting, camera placement, missed or extra counts..."></textarea></label>
       <label class="consent"><input name="consent" type="checkbox">
-        Upload this report and automatically collected device/tracking diagnostics to Sajdah's Firebase testing backend. These details may reveal prayer activity. No camera/video, images, raw body landmarks, location, audio or unique device identifiers are included.</label>
-      <button id="submit-feedback" class="primary" type="submit">Save test feedback</button>
+        <span>Upload this report and automatically collected device/tracking diagnostics to Sajdah's Firebase testing backend. These details may reveal prayer activity. No camera/video, images, raw body landmarks, location, audio or unique device identifiers are included.</span></label>
+      <button id="submit-feedback" class="primary" type="submit">Submit / Save test feedback</button>
     </form>
     <div class="controls"><button id="export-feedback">Export saved feedback (JSON)</button></div>
     <div id="feedback-export" hidden>
       <label for="feedback-json">Saved feedback JSON (select all and copy)</label>
       <textarea id="feedback-json" rows="8" readonly spellcheck="false" style="width: 100%"></textarea>
-      <p>Save a private copy before clearing app data. This can contain your notes and device details.</p>
+      <p class="muted">Save a private copy before clearing app data.</p>
     </div>
     <p id="feedback-status" role="status"></p>
     <details><summary>Sample feedback (example only, never uploaded)</summary><pre id="feedback-sample"></pre></details>
-    <p>Local feedback persists in this browser until app/browser data is cleared.
-      Uploads require an operational Firebase backend; failures are displayed.
-      Uploaded feedback is stored in Iowa, USA, until manually deleted by the
-      project owner. Keep the report ID shown after uploading if you want to
-      request deletion. Feedback does not change counts or automatically retrain the model.</p>
+    <p class="muted">Local feedback persists in this browser until cleared. Uploaded reports are stored in Iowa, USA; keep your Report ID for deletion requests.</p>
   </details>
   <script type="module" src="feedback.mjs"></script>
 </body>

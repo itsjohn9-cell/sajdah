@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { RakatCounter, classifyPose, standingCalibration, estimateFaceScale } from "../web/rakat/counter.mjs";
-import { PoseEvidence, readNativeSensors, deviceIsMoving, sensorOrientation } from "../web/rakat/sensors.mjs";
+import { PoseEvidence, MotionStabilityFilter, readNativeSensors, deviceIsMoving, sensorOrientation } from "../web/rakat/sensors.mjs";
 import { buildSyntheticPose } from "./fixtures/video_benchmark_scenarios.mjs";
 
 const ordered = ["standing", "bow", "standing", "sajdah", "sitting", "sajdah", "sitting"];
@@ -215,4 +215,61 @@ test("motion/orientation aid placement but do not infer prayer phases", () => {
   assert.equal(deviceIsMoving({ acceleration: 3 }), true);
   assert.equal(deviceIsMoving({ rotationRate: 1 }), true);
   assert.equal(deviceIsMoving({ acceleration: null, rotationRate: null }), false);
+});
+
+test("MotionStabilityFilter ignores single-frame spikes and triggers only on >=300ms sustained movement", () => {
+  const filter = new MotionStabilityFilter(300);
+  assert.equal(filter.isSustainedMotion({ acceleration: 4 }, false, 100), false);
+  assert.equal(filter.isSustainedMotion({ acceleration: 0.1 }, false, 200), false);
+  // Sustained movement for >= 300ms triggers true
+  assert.equal(filter.isSustainedMotion({ acceleration: 3.5 }, false, 300), false);
+  assert.equal(filter.isSustainedMotion({ acceleration: 3.5 }, false, 599), false);
+  assert.equal(filter.isSustainedMotion({ acceleration: 3.5 }, false, 600), true);
+  filter.reset();
+  assert.equal(filter.isSustainedMotion({ acceleration: 0 }, false, 700), false);
+});
+
+test("matMode counter never pauses on 30s+ out-of-frame Qiyam and enforces 600ms + 1500ms cooldowns", () => {
+  const c = new RakatCounter(2, { adaptive: true, matMode: true });
+  assert.equal(c.phase, "bow");
+  assert.equal(c.hasStood, true);
+
+  // 35 seconds of out-of-frame Qiyam ("unknown") must never pause
+  for (let t = 0; t <= 35000; t += 500) {
+    c.observe("unknown", t);
+  }
+  assert.equal(c.paused, false);
+
+  // Sajdah 1 via overhead occlusion -> 400ms dwell completes at 35900
+  c.observe("sajdah", 35500, { source: "occlusion" });
+  c.observe("sajdah", 35900, { source: "occlusion" });
+  assert.equal(c.sajdahs, 1);
+  assert.equal(c.phase, "between");
+
+  // Rapid brightening release -> 200ms dwell completes at 36200
+  c.observe("unknown", 36000, { source: "occlusion", released: true });
+  c.observe("unknown", 36200, { source: "occlusion", released: true });
+  assert.equal(c.phase, "secondSajdah");
+
+  // 600ms cooldown from sajdah1 completion (35900): rejected at 36400, accepted once >= 36500
+  c.observe("sajdah", 36250, { source: "occlusion" });
+  c.observe("sajdah", 36450, { source: "occlusion" });
+  assert.equal(c.sajdahs, 1);
+  c.observe("sajdah", 36650, { source: "occlusion" });
+  assert.equal(c.sajdahs, 2);
+  assert.equal(c.phase, "exit");
+
+  // Exit completes Rakat 1 at 36900
+  c.observe("sitting", 36700);
+  c.observe("sitting", 36900);
+  assert.equal(c.rakats.length, 1);
+  assert.equal(c.phase, "bow");
+
+  // 1500ms cooldown after exit (36900): adjustment within 1500ms does not trigger Rakat 2 sajdah 1
+  c.observe("sajdah", 37100, { source: "occlusion" });
+  c.observe("sajdah", 38000, { source: "occlusion" });
+  assert.equal(c.sajdahs, 0);
+  // Once held past 36900 + 1500 = 38400, valid Sajdah 1 commits
+  c.observe("sajdah", 38500, { source: "occlusion" });
+  assert.equal(c.sajdahs, 1);
 });

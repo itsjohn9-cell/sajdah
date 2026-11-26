@@ -12,8 +12,8 @@ import {
   selectPrimaryPose,
   DEFAULT_MAT_CALIBRATION,
 } from "../web/rakat/counter.mjs";
-import { LightingMonitor } from "../web/rakat/lighting.mjs";
-import { PoseEvidence, readNativeSensors, deviceIsMoving, sensorOrientation } from "../web/rakat/sensors.mjs";
+import { LightingMonitor, computeMeanLuminance } from "../web/rakat/lighting.mjs";
+import { PoseEvidence, MotionStabilityFilter, readNativeSensors, deviceIsMoving, sensorOrientation } from "../web/rakat/sensors.mjs";
 import { buildSyntheticPose } from "./fixtures/video_benchmark_scenarios.mjs";
 
 async function harness({ pendingModel = false, pendingCamera = false, denied = false, nativeLighting = false, completedRakat = 0, nativeSensors = null } = {}) {
@@ -114,13 +114,15 @@ async function harness({ pendingModel = false, pendingCamera = false, denied = f
   }, { context });
   await mediaModule.link(() => {});
   await mediaModule.evaluate();
-  const lightingModule = new vm.SyntheticModule(["LightingMonitor"], function () {
+  const lightingModule = new vm.SyntheticModule(["LightingMonitor", "computeMeanLuminance"], function () {
     this.setExport("LightingMonitor", LightingMonitor);
+    this.setExport("computeMeanLuminance", computeMeanLuminance);
   }, { context });
   const sensorsModule = new vm.SyntheticModule(
-    ["PoseEvidence", "readNativeSensors", "deviceIsMoving", "sensorOrientation"],
+    ["PoseEvidence", "MotionStabilityFilter", "readNativeSensors", "deviceIsMoving", "sensorOrientation"],
     function () {
       this.setExport("PoseEvidence", PoseEvidence);
+      this.setExport("MotionStabilityFilter", MotionStabilityFilter);
       this.setExport("readNativeSensors", readNativeSensors);
       this.setExport("deviceIsMoving", deviceIsMoving);
       this.setExport("sensorOrientation", sensorOrientation);
@@ -477,7 +479,7 @@ test("lighting sampler failure is explicit and does not terminate pose tracking"
 const matPoses = {
   standing: buildSyntheticPose({ headY: 0.22, shoulderY: 0.38, hipY: 0.60 }),
   bow: buildSyntheticPose({ headY: 0.48, shoulderY: 0.50 }),
-  sitting: buildSyntheticPose({ headY: 0.40, shoulderY: 0.60 }),
+  sitting: buildSyntheticPose({ headY: 0.58, shoulderY: 0.72 }),
   sajdah: buildSyntheticPose({ headY: 0.72, shoulderY: 0.65 }),
 };
 
@@ -507,9 +509,9 @@ async function matApp(options = {}) {
   const app = await harness(options);
   app.element("placement").value = "mat";
   await app.click("start");
-  const drive = driver(app);
-  drive.hold("standing", 1900);
   assert.match(app.element("session-state").textContent, /Tracking active/);
+  const drive = driver(app);
+  drive.hold("unknown", 1100);
   return { app, drive };
 }
 
@@ -521,11 +523,11 @@ test("live camera path counts fast 2/3/4-rakat sequences and exposes observed ph
     app.element("placement").value = "mat";
     await app.click("start");
     const drive = driver(app);
-    drive.hold("standing", 1900);
     for (let rakat = 0; rakat < target; rakat++) {
-      for (const posture of ["standing", "bow", "standing", "sajdah", "sitting", "sajdah", "sitting"]) {
+      for (const posture of ["standing", "bow", "standing", "sajdah", "sitting", "sajdah"]) {
         drive.hold(posture);
       }
+      drive.hold("sitting", 1500);
     }
     const result = app.module.namespace.getLocalDiagnostics();
     assert.equal(result.rakats.length, target);
@@ -558,23 +560,32 @@ test("native proximity supports long occlusion and fast release without falsely 
   assert.equal(result.observed.qaumah, false);
   assert.equal(result.observed.jalsah, false);
   assert.ok(result.sources.includes("proximity"));
-  assert.match(app.element("history").children[0].textContent, /unverified: qaumah/);
+  assert.match(app.element("history").children[0].textContent, /unverified: .*qaumah/);
   app.click("stop");
   assert.equal(app.sensorRequests.at(-1), false);
 });
 
-test("black camera frames during a low phase neither manufacture sajdah nor hide lost tracking", async () => {
+test("black camera frames during a low phase never manufacture sajdah 2 in mat mode and still time out in auto mode", async () => {
+  // 1. In Mat mode, sustained darkness stays live without manufacturing a second sajdah or rakat
   const { app, drive } = await matApp();
   drive.hold("sajdah");
   app.setPixels(0);
-  drive.hold("unknown", 4200);
-  assert.match(app.element("status").textContent, /Body tracking lost/);
+  drive.hold("unknown", 5000);
+  assert.match(app.element("session-state").textContent, /Tracking active/);
   assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 1);
   assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 0);
-  app.click("resume");
-  drive.hold("standing");
-  assert.match(app.element("session-state").textContent, /Tracking active/);
-  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+
+  // 2. In non-mat auto mode, >4s black unknown frames time out with Body tracking lost
+  const autoApp = await harness();
+  autoApp.setPoses([standingPose()]);
+  await autoApp.click("start");
+  const autoDrive = driver(autoApp);
+  autoDrive.hold("standing", 1900);
+  autoDrive.hold("sajdah");
+  autoApp.setPixels(0);
+  autoDrive.hold("unknown", 4200);
+  assert.match(autoApp.element("status").textContent, /Body tracking lost/);
+  assert.match(autoApp.element("session-state").textContent, /Tracking paused/);
 });
 
 test("Stop keeps second-sajdah partials without adding a completed estimate", async () => {
@@ -585,15 +596,24 @@ test("Stop keeps second-sajdah partials without adding a completed estimate", as
   assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 2);
 });
 
-test("phone acceleration, rotation or changed angle requires recalibration", async () => {
+test("single-frame vibration is ignored, while sustained acceleration, rotation or changed angle requires recalibration", async () => {
   for (const change of [{ acceleration: 3 }, { rotationRate: 1 }, { pitch: 30 }, { roll: 30 }]) {
     const sensors = {
       orientationAvailable: true, pitch: 0, roll: 0,
       accelerationAvailable: true, acceleration: 0, gyroscopeAvailable: true, rotationRate: 0,
     };
     const { app, drive } = await matApp({ nativeSensors: sensors });
+    // Single 100ms vibration spike must NOT wipe calibration or pause
     Object.assign(sensors, change);
-    drive.hold("sajdah");
+    drive.hold("bow", 0);
+    assert.match(app.element("session-state").textContent, /Tracking active/);
+    Object.assign(sensors, { pitch: 0, roll: 0, acceleration: 0, rotationRate: 0 });
+    drive.hold("bow", 100);
+    assert.match(app.element("session-state").textContent, /Tracking active/);
+
+    // Sustained movement (>= 300ms) DOES pause and require recalibration
+    Object.assign(sensors, change);
+    drive.hold("sajdah", 500);
     assert.match(app.element("status").textContent, /Phone moved/);
     assert.equal(app.element("resume").disabled, true);
     assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
@@ -616,15 +636,24 @@ test("multi-person pause automatically restarts partial state without stale time
   assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 2);
 });
 
-test("native sensors cannot calibrate or count without a working camera", async () => {
+test("native sensors cannot calibrate or count without a working camera or lit ceiling baseline", async () => {
   const sensors = { proximityAvailable: true, proximityDistance: 0, proximityMaxRange: 5 };
-  const app = await harness({ nativeSensors: sensors });
-  app.element("placement").value = "mat";
-  await app.click("start");
-  const drive = driver(app);
-  drive.hold("unknown", 5000);
-  assert.match(app.element("session-state").textContent, /Setup in progress/);
-  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+  // In auto calibration mode without pose, setup never finishes and proximity counts 0
+  const autoApp = await harness({ nativeSensors: sensors });
+  await autoApp.click("start");
+  const autoDrive = driver(autoApp);
+  autoDrive.hold("unknown", 5000);
+  assert.match(autoApp.element("session-state").textContent, /Setup in progress/);
+  assert.equal(autoApp.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+  // In pitch-dark Mat mode without baseline or visual frames, proximity cannot count either
+  const darkMatApp = await harness({ nativeSensors: sensors });
+  darkMatApp.element("placement").value = "mat";
+  darkMatApp.setPixels(0);
+  await darkMatApp.click("start");
+  const darkDrive = driver(darkMatApp);
+  darkDrive.hold("unknown", 5000);
+  assert.equal(darkMatApp.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+  // Permission denied never starts sensors
   const denied = await harness({ nativeSensors: sensors, denied: true });
   await denied.click("start");
   assert.ok(!denied.sensorRequests.includes(true));
@@ -671,32 +700,51 @@ test("frozen camera cannot advance from proximity, and exit paths release native
   }
 });
 
-test("Start on Mat button immediately activates floor mat tracking without standing calibration", async () => {
+test("Mat placement immediately activates floor tracking on start without standing calibration and counts via overhead luminance drop", async () => {
   const app = await harness();
   app.element("placement").value = "mat";
+  app.setPixels(140);
+  await app.click("start");
+  assert.match(app.element("session-state").textContent, /Tracking active/);
+  assert.match(app.element("status").textContent, /Floor mat tracking active/);
+  assert.equal(app.element("start-mat").hidden, true);
+  const drive = driver(app);
+  // Settle out of frame (Qiyam) for 2000ms - never pauses or prematurely triggers
+  drive.hold("unknown", 2000);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 0);
+  assert.equal(app.element("hud-phase").textContent, "bow");
+
+  // 1st Sajdah via overhead luminance drop + release via brightening
+  app.setPixels(30);
+  drive.hold("unknown", 600);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 1);
+  assert.match(app.element("hud-sensor").textContent, /src:occlusion/);
+  app.setPixels(140);
+  drive.hold("unknown", 500);
+
+  // 2nd Sajdah + release completes Rakat 1
+  app.setPixels(25);
+  drive.hold("unknown", 600);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedSajdahs, 2);
+  app.setPixels(140);
+  drive.hold("unknown", 500);
+  assert.equal(app.module.namespace.feedbackSnapshot().detectedRakat, 1);
+
+  // Done / Report Issue stops camera and opens unified review panel
+  await app.click("done-review");
+  assert.equal(app.element("feedback-section").open, true);
+  assert.match(app.element("review-comparison").textContent, /1 rakat\(s\)/);
+  assert.ok(app.tracks.every(track => track.ended));
+});
+
+test("Auto placement allows Start on Mat manual override during setup", async () => {
+  const app = await harness();
+  app.element("placement").value = "auto";
   await app.click("start");
   assert.equal(app.element("start-mat").hidden, false);
   assert.match(app.element("session-state").textContent, /Setup in progress/);
   await app.click("start-mat");
   assert.match(app.element("session-state").textContent, /Tracking active/);
-  assert.match(app.element("status").textContent, /Floor mat tracking active/);
   assert.equal(app.element("start-mat").hidden, true);
-  app.click("stop");
-});
-
-test("Floor prostration during mat calibration auto-activates tracking and does not trap on Alert A", async () => {
-  const app = await harness();
-  app.element("placement").value = "mat";
-  await app.click("start");
-  app.element("video").currentTime++;
-  app.frame(100);
-  assert.match(app.element("status").textContent, /Start on Mat/);
-  assert.match(app.element("session-state").textContent, /Setup in progress/);
-  // User prostrates directly on floor over the camera
-  app.setPoses([buildSyntheticPose({ headY: 0.72, shoulderY: 0.65 })]);
-  app.element("video").currentTime++;
-  app.frame(200);
-  assert.match(app.element("session-state").textContent, /Tracking active/);
-  assert.match(app.element("status").textContent, /Floor mat tracking active/);
   app.click("stop");
 });

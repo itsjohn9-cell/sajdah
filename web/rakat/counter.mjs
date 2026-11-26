@@ -14,16 +14,20 @@ export class RakatCounter {
     if (![2, 3, 4].includes(target)) throw new Error("Invalid rakat target");
     this.target = target;
     this.adaptive = Boolean(options.adaptive);
+    this.matMode = Boolean(options.matMode);
+    if (this.matMode) this.adaptive = true;
     this.rakats = [];
     this.sajdahs = 0;
-    this.phase = "standing";
+    this.phase = this.matMode ? "bow" : "standing";
     this.candidate = "unknown";
     this.since = 0;
     this.lastStable = "unknown";
-    this.hasStood = false;
+    this.hasStood = this.matMode;
     this.paused = false;
     this.reason = "";
     this.lastTime = null;
+    this.lastSajdahTime = null;
+    this.lastCycleCompleteTime = null;
     this.observed = {};
     this.sources = new Set();
   }
@@ -36,7 +40,7 @@ export class RakatCounter {
       throw new Error("Invalid posture observation");
     }
     if (this.paused || this.complete) return;
-    const maxGap = this.adaptive ? 3500 : 1500;
+    const maxGap = this.matMode ? Infinity : (this.adaptive ? 3500 : 1500);
     if (this.lastTime !== null && time - this.lastTime > maxGap) {
       this.pause("Camera frames were interrupted. Review the current rakat.");
       return;
@@ -49,7 +53,7 @@ export class RakatCounter {
       this.since = time;
     }
     if (candidate === "unknown") {
-      const unknownTimeout = this.adaptive ? 4000 : 1000;
+      const unknownTimeout = this.matMode ? Infinity : (this.adaptive ? 4000 : 1000);
       if (time - this.since >= unknownTimeout) {
         this.pause("Body tracking lost. Reposition and restart the current rakat.");
       }
@@ -57,6 +61,15 @@ export class RakatCounter {
     }
     const dwell = this.adaptive ? (posture === "sajdah" ? 400 : 200) : 600;
     if (time - this.since < dwell || this.lastStable === candidate) return;
+
+    const sajdah1InCooldown = this.matMode &&
+      (this.phase === "standing" || this.phase === "bow" || this.phase === "upright" || this.phase === "firstSajdah") &&
+      this.lastCycleCompleteTime !== null && time - this.lastCycleCompleteTime < 1500;
+    const sajdah2InCooldown = this.adaptive &&
+      this.phase === "secondSajdah" &&
+      this.lastSajdahTime !== null && time - this.lastSajdahTime < 600;
+    if (candidate === "sajdah" && (sajdah1InCooldown || sajdah2InCooldown)) return;
+
     this.lastStable = candidate;
 
     if (this.adaptive) {
@@ -65,6 +78,7 @@ export class RakatCounter {
         this.sajdahs = 1;
         this.observed.sajdah1 = cameraObserved;
         this.sources.add(evidence.source || "camera");
+        this.lastSajdahTime = time;
         this.phase = "between";
       };
       switch (this.phase) {
@@ -73,10 +87,17 @@ export class RakatCounter {
             this.hasStood = true;
             this.observed.qiyam = cameraObserved;
             this.phase = "bow";
+          } else if (this.hasStood && posture === "bow") {
+            this.observed.ruku = cameraObserved;
+            this.phase = "upright";
+          } else if (this.hasStood && posture === "sajdah") {
+            startSajdah();
           }
           break;
         case "bow":
-          if (posture === "bow") {
+          if (posture === "standing" && this.matMode) {
+            this.observed.qiyam = cameraObserved;
+          } else if (posture === "bow") {
             this.observed.ruku = cameraObserved;
             this.phase = "upright";
           } else if (posture === "sajdah" && this.hasStood) {
@@ -97,7 +118,7 @@ export class RakatCounter {
         case "between":
           if (posture === "sitting" || posture === "standing" || candidate === "released") {
             this.observed.jalsah = posture === "sitting" && cameraObserved;
-            if (candidate === "released") this.sources.add("proximity");
+            if (candidate === "released") this.sources.add(evidence.source === "occlusion" ? "occlusion" : "proximity");
             this.phase = "secondSajdah";
           }
           break;
@@ -106,13 +127,14 @@ export class RakatCounter {
             this.sajdahs = 2;
             this.observed.sajdah2 = cameraObserved;
             this.sources.add(evidence.source || "camera");
+            this.lastSajdahTime = time;
             this.phase = "exit";
           }
           break;
         case "exit":
           if (posture === "sitting" || posture === "standing" || candidate === "released") {
             this.observed.exit = candidate !== "released" && cameraObserved;
-            if (candidate === "released") this.sources.add("proximity");
+            if (candidate === "released") this.sources.add(evidence.source === "occlusion" ? "occlusion" : "proximity");
             const observed = Object.fromEntries(
               ["qiyam", "ruku", "qaumah", "sajdah1", "jalsah", "sajdah2", "exit"]
                 .map(phase => [phase, this.observed[phase] === true]),
@@ -122,9 +144,10 @@ export class RakatCounter {
               quality: Object.values(observed).every(Boolean) ? "sequence-observed" : "sajdah-pair",
             });
             this.sajdahs = 0;
-            this.hasStood = posture === "standing";
-            this.phase = posture === "standing" ? "bow" : "standing";
-            this.observed = this.hasStood ? { qiyam: cameraObserved } : {};
+            this.hasStood = this.matMode || posture === "standing";
+            this.phase = (this.matMode || posture === "standing") ? "bow" : "standing";
+            this.lastCycleCompleteTime = time;
+            this.observed = posture === "standing" ? { qiyam: cameraObserved } : {};
             this.sources.clear();
           }
           break;
@@ -182,15 +205,23 @@ export class RakatCounter {
 
   restartCurrent() {
     this.sajdahs = 0;
-    this.phase = "standing";
+    this.phase = this.matMode ? "bow" : "standing";
     this.candidate = this.lastStable = "unknown";
     this.lastTime = null;
     this.since = 0;
-    this.hasStood = false;
+    this.lastSajdahTime = null;
+    this.lastCycleCompleteTime = null;
+    this.hasStood = this.matMode;
     this.observed = {};
     this.sources.clear();
     this.paused = false;
     this.reason = "";
+  }
+
+  beginMatMode() {
+    this.adaptive = true;
+    this.matMode = true;
+    this.restartCurrent();
   }
 
   undoRakat() {
@@ -378,12 +409,12 @@ export function classifyPose(points, calibration, context = {}) {
 
   // Mode 1: Mat Mode (Phone lying flat or at prostration position on the mat)
   if (calibration.mode === "mat") {
-    const up = upperFeatures(points, 0.35);
-    if (up && up.head) {
-      const faceScale = Number.isFinite(context.faceScale)
-        ? context.faceScale
-        : estimateFaceScale(points);
+    const up = upperFeatures(points, 0.30);
+    const faceScale = Number.isFinite(context.faceScale)
+      ? context.faceScale
+      : estimateFaceScale(points);
 
+    if (up && up.head) {
       // Torso is upright if head is clearly above shoulders
       const torsoUpright = up.shoulder && up.head.y < up.shoulder.y - 0.04;
 
@@ -400,18 +431,22 @@ export function classifyPose(points, calibration, context = {}) {
         return "sitting";
       }
 
-      // Horizontal torso at mid-height is bow (Ruku)
-      const isBow = up.shoulder && Math.abs(up.head.y - up.shoulder.y) < 0.08 && up.head.y < 0.65;
+      // Horizontal/overhead torso leaning forward is bow (Ruku)
+      const isBow = up.shoulder &&
+        Math.abs(up.head.y - up.shoulder.y) < 0.095 &&
+        up.head.y <= up.shoulder.y + 0.05 &&
+        up.head.y < 0.65;
       if (isBow) {
         return "bow";
       }
 
-      // Head descending to the mat at or below shoulder height is sajdah
+      // Head descending to the mat at or below shoulder height, or very close overhead face, is sajdah
       // Must NOT be torsoUpright (if head is clearly above shoulders, it cannot be sajdah)
       const isSajdah = !torsoUpright && (
-        up.head.y >= 0.60 ||
-        (up.shoulder && up.head.y >= up.shoulder.y - 0.05 && up.head.y >= 0.50) ||
-        (calibration.headY && up.head.y >= calibration.headY + 0.25)
+        up.head.y >= 0.55 ||
+        (up.shoulder && up.head.y >= up.shoulder.y - 0.05 && up.head.y >= 0.45) ||
+        (calibration.headY && up.head.y >= calibration.headY + 0.22) ||
+        faceScale >= 0.35
       );
       if (isSajdah) {
         return "sajdah";
@@ -419,7 +454,8 @@ export function classifyPose(points, calibration, context = {}) {
       return torsoUpright ? "standing" : "unknown";
     }
 
-    if (points && points[0] && visible(points[0], 0.35) && points[0].y >= 0.60) {
+    if (points && points[0] && visible(points[0], 0.30) &&
+        (points[0].y >= 0.55 || (context.allowHeadCloseup && faceScale >= 0.35))) {
       return "sajdah";
     }
 

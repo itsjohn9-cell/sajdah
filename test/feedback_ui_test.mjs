@@ -119,20 +119,23 @@ async function harness({ native = false, saved = "[]", consent = false } = {}) {
   };
 }
 
-test("review shortcut opens the feedback form and offsets scrolling below sticky results", async () => {
-  const app = await harness();
-  app.review();
-  assert.equal(app.element("feedback-section").open, true);
-  assert.equal(app.element("feedback-section").style.scrollMarginTop, "172px");
-  assert.equal(app.element("feedback-section").scrolled, true);
-});
-
-test("sticky feedback entry and consent disclosure keep reports reachable and media private", async () => {
+test("unified review panel and consent disclosure keep reporting accessible and media private", async () => {
   const html = await readFile(new URL("../web/rakat/index.html", import.meta.url), "utf8");
-  assert.match(html, /id="review-feedback" class="primary report-button"/);
+  assert.match(html, /id="done-review"[^>]*aria-controls="feedback-section"/);
+  assert.match(html, /id="feedback-section"/);
   assert.match(html, /Upload requires your consent for each report/);
   assert.match(html, /camera\/video, images, raw body landmarks, location/);
   assert.doesNotMatch(html, /name="consent" checked/);
+});
+
+test("review picker auto-populates verdict and expected sajdahs in unified panel", async () => {
+  const html = await readFile(new URL("../web/rakat/index.html", import.meta.url), "utf8");
+  assert.match(html, /id="rakat-picker"/);
+  assert.match(html, /id="quick-review-verdict"/);
+  assert.match(html, /id="timeline-log"/);
+  const app = await harness();
+  app.element("feedback-section").open = true;
+  assert.equal(app.element("feedback-section").open, true);
 });
 
 test("device details and posture diagnostics are auto-filled and uploaded only with consent", async () => {

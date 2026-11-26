@@ -50,60 +50,50 @@ function updateExpectedSajdahs() {
 
 expectedRakatInput?.addEventListener("input", updateExpectedSajdahs);
 
-document.getElementById("review-feedback").addEventListener("click", () => {
+function openFeedbackSection() {
   const section = document.getElementById("feedback-section");
+  if (!section) return;
+  section.hidden = false;
   section.open = true;
-  section.style.scrollMarginTop = `${document.querySelector(".session-summary").offsetHeight + 12}px`;
+  const summary = document.querySelector(".session-summary");
+  if (section.style) {
+    section.style.scrollMarginTop = `${(summary?.offsetHeight || 0) + 12}px`;
+  }
   if (typeof section.scrollIntoView === "function") section.scrollIntoView({ behavior: "smooth" });
-});
+}
 
-const quickReviewSection = document.getElementById("quick-review");
+document.getElementById("review-feedback")?.addEventListener("click", openFeedbackSection);
+
 const verdictBanner = document.getElementById("quick-review-verdict");
-const closeReviewBtn = document.getElementById("close-quick-review");
-const openFullFormBtn = document.getElementById("quick-fill-feedback");
-
-if (closeReviewBtn) {
-  closeReviewBtn.addEventListener("click", () => {
-    if (quickReviewSection) quickReviewSection.hidden = true;
-  });
-}
-
-if (openFullFormBtn) {
-  openFullFormBtn.addEventListener("click", () => {
-    const section = document.getElementById("feedback-section");
-    if (section) {
-      section.open = true;
-      if (typeof section.scrollIntoView === "function") {
-        section.scrollIntoView({ behavior: "smooth" });
-      }
-    }
-  });
-}
+const timelineDetails = document.getElementById("quick-timeline-details");
 
 if (typeof document.querySelectorAll === "function") {
-  document.querySelectorAll(".rakat-opt").forEach(btn => {
+  const optButtons = document.querySelectorAll(".rakat-opt");
+  optButtons.forEach(btn => {
     btn.addEventListener("click", () => {
+      optButtons.forEach(b => b.classList?.remove("active"));
+      btn.classList?.add("active");
       const actualRakat = Number(btn.getAttribute("data-rakat"));
       const snapshot = feedbackSnapshot();
       const detectedRakat = snapshot.detectedRakat;
-      const isCorrect = actualRakat === detectedRakat;
+      const isCorrect = actualRakat === detectedRakat && snapshot.detectedSajdahs === actualRakat * 2;
 
       if (verdictBanner) {
         verdictBanner.hidden = false;
         if (isCorrect) {
           verdictBanner.style.color = "#176b58";
-          verdictBanner.textContent = `✅ Perfect match! You prayed ${actualRakat} rakat(s) and Sajdah detected ${detectedRakat} rakat(s).`;
+          verdictBanner.textContent = `Match: prayed ${actualRakat} rakat(s) and Sajdah detected ${detectedRakat} rakat(s).`;
         } else {
           verdictBanner.style.color = "#a33";
-          verdictBanner.textContent = `⚠️ Mismatch: You prayed ${actualRakat} rakat(s), but Sajdah detected ${detectedRakat} rakat(s) (${snapshot.detectedSajdahs} sajdahs). Detailed log is ready below.`;
+          verdictBanner.textContent = `Mismatch: prayed ${actualRakat} rakat(s), Sajdah detected ${detectedRakat} rakat(s) (${snapshot.detectedSajdahs} sajdahs).`;
         }
       }
 
-      const expectedRakatInput = form.querySelector('[name="expectedRakat"]');
-      const expectedSajdahsInput = form.querySelector('[name="expectedSajdahs"]');
+      if (timelineDetails && !isCorrect) timelineDetails.open = true;
+
+      if (expectedRakatInput) expectedRakatInput.value = String(actualRakat);
+      if (expectedSajdahsInput) expectedSajdahsInput.value = String(actualRakat * 2);
       const verdictSelect = form.querySelector('[name="verdict"]');
-      if (expectedRakatInput) expectedRakatInput.value = actualRakat;
-      if (expectedSajdahsInput) expectedSajdahsInput.value = actualRakat * 2;
       if (verdictSelect) verdictSelect.value = isCorrect ? "correct" : "incorrect";
     });
   });
