@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'src/app.dart';
 import 'src/store.dart';
+import 'src/tasbeeh_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -9,10 +10,20 @@ void main() {
 }
 
 class SijdaApp extends StatefulWidget {
-  const SijdaApp({super.key, this.store, this.playBeep});
+  const SijdaApp({
+    super.key,
+    this.store,
+    this.playBeep,
+    this.vibrateAlert,
+    this.enterPip,
+    this.initialPipMode = false,
+  });
 
   final SijdaStore? store;
   final Future<void> Function()? playBeep;
+  final VibrateAlertCallback? vibrateAlert;
+  final Future<bool> Function()? enterPip;
+  final bool initialPipMode;
 
   @override
   State<SijdaApp> createState() => _SijdaAppState();
@@ -110,7 +121,13 @@ class _SijdaAppState extends State<SijdaApp> {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          return SijdaHome(store: snapshot.data!, playBeep: widget.playBeep);
+          return SijdaHome(
+            store: snapshot.data!,
+            playBeep: widget.playBeep,
+            vibrateAlert: widget.vibrateAlert,
+            enterPip: widget.enterPip,
+            initialPipMode: widget.initialPipMode,
+          );
         },
       ),
     );

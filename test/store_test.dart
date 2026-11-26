@@ -358,4 +358,33 @@ void main() {
     },
   );
 
+  test('vibrationBeep persists cleanly and defaults true on older v3 backups', () async {
+    final storage = MemoryStorage();
+    final store = SijdaStore(storage);
+    expect(store.vibrationBeep, isTrue);
+
+    await store.setBeepSettings(
+      guided: false,
+      vibration: false,
+      freeMode: FreeBeepMode.every,
+      interval: 5,
+    );
+    expect(store.vibrationBeep, isFalse);
+
+    final restored = await SijdaStore.load(storage: storage);
+    expect(restored.vibrationBeep, isFalse);
+    expect(restored.guidedBeep, isFalse);
+
+    final v3WithoutVibration = jsonDecode(storage.value!) as Map<String, dynamic>;
+    v3WithoutVibration.remove('vibrationBeep');
+    storage.value = jsonEncode(v3WithoutVibration);
+    final migrated = await SijdaStore.load(storage: storage);
+    expect(migrated.vibrationBeep, isTrue);
+
+    storage.value = jsonEncode({...v3WithoutVibration, 'vibrationBeep': 'loud'});
+    await expectLater(
+      SijdaStore.load(storage: storage),
+      throwsFormatException,
+    );
+  });
 }

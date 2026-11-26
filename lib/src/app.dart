@@ -6,11 +6,22 @@ import 'package:url_launcher/url_launcher.dart';
 import 'store.dart';
 import 'tasbeeh_page.dart';
 import 'auto_rakat.dart';
+import 'system_bridge.dart';
 
 class SijdaHome extends StatefulWidget {
-  const SijdaHome({super.key, required this.store, this.playBeep});
+  const SijdaHome({
+    super.key,
+    required this.store,
+    this.playBeep,
+    this.vibrateAlert,
+    this.enterPip,
+    this.initialPipMode = false,
+  });
   final SijdaStore store;
   final Future<void> Function()? playBeep;
+  final VibrateAlertCallback? vibrateAlert;
+  final Future<bool> Function()? enterPip;
+  final bool initialPipMode;
 
   @override
   State<SijdaHome> createState() => _SijdaHomeState();
@@ -20,6 +31,59 @@ class _SijdaHomeState extends State<SijdaHome> {
   int _tab = 0;
   int _rakat = 0;
   int _rakatTarget = 2;
+  late bool _inPipMode = widget.initialPipMode;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemBridge.listenPip(
+      onPipChanged: (inPip) {
+        if (!mounted) return;
+        setState(() {
+          _inPipMode = inPip;
+          if (inPip) _tab = 2;
+        });
+      },
+      onPipIncrement: () {
+        triggerTasbeehIncrement(
+          store: widget.store,
+          playBeep: widget.playBeep,
+          vibrateAlert: widget.vibrateAlert,
+          context: mounted ? context : null,
+        );
+      },
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant SijdaHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialPipMode != widget.initialPipMode) {
+      _inPipMode = widget.initialPipMode;
+    }
+  }
+
+  @override
+  void dispose() {
+    SystemBridge.clearListeners();
+    super.dispose();
+  }
+
+  Future<void> _enterTasbeehPip() async {
+    if (_tab != 2) {
+      setState(() => _tab = 2);
+    }
+    final entered = await (widget.enterPip ?? SystemBridge.enterPip)();
+    if (!entered && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Picture-in-Picture mini counter is available on supported Android devices.',
+          ),
+        ),
+      );
+    }
+  }
 
   Future<void> _openPrivacyPolicy() async {
     final uri = Uri.parse(
@@ -109,6 +173,18 @@ class _SijdaHomeState extends State<SijdaHome> {
       listenable: widget.store,
       builder: (context, _) {
         final store = widget.store;
+        if (_inPipMode) {
+          return Scaffold(
+            body: SafeArea(
+              child: TasbeehPage(
+                store: store,
+                playBeep: widget.playBeep,
+                vibrateAlert: widget.vibrateAlert,
+                inPipMode: true,
+              ),
+            ),
+          );
+        }
         return Scaffold(
           appBar: AppBar(
             title: Text(_tab == 2 ? 'Tasbeeh Counter' : 'Sajdah'),
@@ -121,6 +197,12 @@ class _SijdaHomeState extends State<SijdaHome> {
                   )
                 : null,
             actions: [
+              if (_tab == 2)
+                IconButton(
+                  tooltip: 'Picture-in-Picture',
+                  onPressed: _enterTasbeehPip,
+                  icon: const Icon(Icons.picture_in_picture_alt),
+                ),
               IconButton(
                 tooltip: 'About and privacy',
                 onPressed: _showAboutDialog,
@@ -149,7 +231,12 @@ class _SijdaHomeState extends State<SijdaHome> {
                       ),
                     Expanded(
                       child: _tab == 2
-                          ? TasbeehPage(store: store, playBeep: widget.playBeep)
+                          ? TasbeehPage(
+                              store: store,
+                              playBeep: widget.playBeep,
+                              vibrateAlert: widget.vibrateAlert,
+                              onEnterPip: _enterTasbeehPip,
+                            )
                           : SingleChildScrollView(
                               padding: const EdgeInsets.all(20),
                               child: switch (_tab) {

@@ -294,4 +294,100 @@ void main() {
       expect(tester.takeException(), isNull);
     }
   });
+
+  testWidgets(
+    'strong vibration beeps fire on milestones even when audio fails or guided sound is off',
+    (tester) async {
+      final store = SijdaStore(MemoryStorage())..guidedCount = 33;
+      final vibrationCalls = <bool>[];
+      await tester.pumpWidget(
+        SijdaApp(
+          store: store,
+          playBeep: () async {
+            throw Exception('Volume 0 / audio unavailable');
+          },
+          vibrateAlert: ({complete = false}) async {
+            vibrationCalls.add(complete);
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openTab(tester, 'Tasbeeh');
+
+      // Milestone 34 fires non-complete strong vibration beep even when audio throws
+      await tester.tap(find.byKey(const Key('tasbeeh-count-area')));
+      await tester.pumpAndSettle();
+      expect(store.guidedCount, 34);
+      expect(vibrationCalls, [false]);
+
+      // Disable guided sound beeps in dialog while leaving Strong vibration beeps on
+      await tester.tap(find.text('Stage beeps: on'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guided-stage beeps'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save settings'));
+      await tester.pumpAndSettle();
+      expect(store.guidedBeep, isFalse);
+      expect(store.vibrationBeep, isTrue);
+
+      // Reaching 100 triggers completion triple-pulse vibration even with sound off
+      store.guidedCount = 99;
+      await tester.tap(find.byKey(const Key('tasbeeh-count-area')));
+      await tester.pumpAndSettle();
+      expect(store.guidedCount, 100);
+      expect(vibrationCalls, [false, true]);
+    },
+  );
+
+  testWidgets(
+    'Tasbeeh PiP button triggers native PiP and compact PiP view renders and increments without overflow',
+    (tester) async {
+      var pipRequests = 0;
+      final store = SijdaStore(MemoryStorage())..guidedCount = 33;
+      final vibrationCalls = <bool>[];
+      await tester.pumpWidget(
+        SijdaApp(
+          store: store,
+          playBeep: () async {},
+          vibrateAlert: ({complete = false}) async {
+            vibrationCalls.add(complete);
+          },
+          enterPip: () async {
+            pipRequests++;
+            return true;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openTab(tester, 'Tasbeeh');
+      await tester.tap(find.byKey(const Key('tasbeeh-pip-button')));
+      await tester.pumpAndSettle();
+      expect(pipRequests, 1);
+
+      // Render inside small PiP bounds (180x200) and verify zero overflow + increment + vibration
+      tester.view.physicalSize = const Size(180, 200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        SijdaApp(
+          store: store,
+          initialPipMode: true,
+          playBeep: () async {},
+          vibrateAlert: ({complete = false}) async {
+            vibrationCalls.add(complete);
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('tasbeeh-pip-view')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('tasbeeh-pip-tap-area')));
+      await tester.pumpAndSettle();
+      expect(store.guidedCount, 34);
+      expect(vibrationCalls, [false]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

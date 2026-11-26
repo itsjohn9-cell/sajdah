@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,16 +8,67 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import 'store.dart';
 import 'beep_sound.dart';
+import 'system_bridge.dart';
 
 const sajdaEmerald = Color(0xFF0F4C3A);
 const sajdaEmeraldLight = Color(0xFF165B47);
 const sajdaGold = Color(0xFFC5A059);
 const _ink = Color(0xFF1B2A24);
 
+typedef VibrateAlertCallback = Future<void> Function({bool complete});
+
+Future<void> triggerTasbeehIncrement({
+  required SijdaStore store,
+  Future<void> Function()? playBeep,
+  VibrateAlertCallback? vibrateAlert,
+  BuildContext? context,
+}) async {
+  if (store.saving) return;
+  HapticFeedback.lightImpact();
+  final previousCount = store.activeCount;
+  final beep = await store.incrementTasbeeh();
+  if (!beep && store.activeCount == previousCount) return;
+
+  final isComplete = store.mode == TasbeehMode.guided && store.guidedComplete;
+  if (beep || (store.vibrationBeep && store.isAlertMilestone(store.activeCount))) {
+    if (store.vibrationBeep) {
+      unawaited(
+        (vibrateAlert ?? SystemBridge.vibrateAlert)(complete: isComplete),
+      );
+    }
+    if (beep) {
+      try {
+        await (playBeep ?? BeepSound.play)();
+      } on Exception catch (exception) {
+        debugPrint('Sijda beep playback failed: $exception');
+        if (context != null && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Count saved, but the beep could not play. Check audio permissions and volume.',
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+}
+
 class TasbeehPage extends StatefulWidget {
-  const TasbeehPage({super.key, required this.store, this.playBeep});
+  const TasbeehPage({
+    super.key,
+    required this.store,
+    this.playBeep,
+    this.vibrateAlert,
+    this.onEnterPip,
+    this.inPipMode = false,
+  });
   final SijdaStore store;
   final Future<void> Function()? playBeep;
+  final VibrateAlertCallback? vibrateAlert;
+  final VoidCallback? onEnterPip;
+  final bool inPipMode;
 
   @override
   State<TasbeehPage> createState() => _TasbeehPageState();
@@ -182,6 +234,10 @@ class _TasbeehPageState extends State<TasbeehPage> {
     final complete = guided && store.guidedComplete;
     final enabled = !store.saving && !complete;
 
+    if (widget.inPipMode) {
+      return _buildPipView(context, store, guided, complete, enabled);
+    }
+
     return ColoredBox(
       color: const Color(0xFFFBF9F5),
       child: LayoutBuilder(
@@ -274,11 +330,11 @@ class _TasbeehPageState extends State<TasbeehPage> {
                         icon: Icon(
                           guided
                               ? (store.guidedBeep
-                                    ? Icons.volume_up
+                                    ? Icons.notifications_active
                                     : Icons.volume_off)
                               : (store.freeBeepMode == FreeBeepMode.off
                                     ? Icons.volume_off
-                                    : Icons.volume_up),
+                                    : Icons.notifications_active),
                           size: 18,
                         ),
                         label: Text(
@@ -294,6 +350,16 @@ class _TasbeehPageState extends State<TasbeehPage> {
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
+                      if (widget.onEnterPip != null)
+                        IconButton(
+                          key: const Key('tasbeeh-pip-button'),
+                          tooltip: 'Mini view (Picture-in-Picture)',
+                          onPressed: widget.onEnterPip,
+                          icon: const Icon(
+                            Icons.picture_in_picture_alt,
+                            color: sajdaEmerald,
+                          ),
+                        ),
                     ],
                   ),
                   if (_isListening)
@@ -507,37 +573,99 @@ class _TasbeehPageState extends State<TasbeehPage> {
     );
   }
 
-  Future<void> _increment(BuildContext context) async {
-    if (widget.store.saving) return;
-    HapticFeedback.lightImpact();
-    final beep = await widget.store.incrementTasbeeh();
-    if (!beep) return;
-    HapticFeedback.mediumImpact();
-    try {
-      await (widget.playBeep ?? BeepSound.play)();
-    } on Exception catch (exception) {
-      debugPrint('Sijda beep playback failed: $exception');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Count saved, but the beep could not play. Check audio permissions and volume.',
+  Widget _buildPipView(
+    BuildContext context,
+    SijdaStore store,
+    bool guided,
+    bool complete,
+    bool enabled,
+  ) {
+    return ColoredBox(
+      key: const Key('tasbeeh-pip-view'),
+      color: sajdaEmerald,
+      child: InkWell(
+        key: const Key('tasbeeh-pip-tap-area'),
+        onTap: enabled ? () => _increment(context) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (guided)
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        store.arabicDhikr,
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFE5C378),
+                        ),
+                      ),
+                    ),
+                  ),
+                Flexible(
+                  flex: 2,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${guided ? store.stageCount : store.tasbeeh}',
+                      style: const TextStyle(
+                        fontSize: 52,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    complete
+                        ? 'Sequence complete'
+                        : guided
+                        ? '${store.dhikr} · ${store.stageCount}/${store.stageTarget} (${store.guidedCount}/100)'
+                        : 'Free count · ${store.tasbeeh}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        );
-      }
-    }
+        ),
+      ),
+    );
+  }
+
+  Future<void> _increment(BuildContext context) async {
+    await triggerTasbeehIncrement(
+      store: widget.store,
+      playBeep: widget.playBeep,
+      vibrateAlert: widget.vibrateAlert,
+      context: context,
+    );
   }
 
   Future<void> _settings(BuildContext context) async {
     final settings =
-        await showDialog<({bool guided, FreeBeepMode mode, int interval})>(
+        await showDialog<
+          ({bool guided, bool vibration, FreeBeepMode mode, int interval})
+        >(
           context: context,
           builder: (context) => _BeepSettings(store: widget.store),
         );
     if (settings != null && context.mounted) {
       await widget.store.setBeepSettings(
         guided: settings.guided,
+        vibration: settings.vibration,
         freeMode: settings.mode,
         interval: settings.interval,
       );
@@ -586,6 +714,7 @@ class _BeepSettings extends StatefulWidget {
 class _BeepSettingsState extends State<_BeepSettings> {
   final _form = GlobalKey<FormState>();
   late bool _guided = widget.store.guidedBeep;
+  late bool _vibration = widget.store.vibrationBeep;
   late FreeBeepMode _mode = widget.store.freeBeepMode;
   late final _interval = TextEditingController(
     text: widget.store.freeBeepInterval.toString(),
@@ -599,7 +728,7 @@ class _BeepSettingsState extends State<_BeepSettings> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Beep settings'),
+    title: const Text('Beep & vibration settings'),
     content: Form(
       key: _form,
       child: SingleChildScrollView(
@@ -615,6 +744,15 @@ class _BeepSettingsState extends State<_BeepSettings> {
               ),
               value: _guided,
               onChanged: (value) => setState(() => _guided = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Strong vibration beeps'),
+              subtitle: const Text(
+                'Multi-pulse vibration rhythm at milestones — works even when volume is 0.',
+              ),
+              value: _vibration,
+              onChanged: (value) => setState(() => _vibration = value),
             ),
             DropdownButtonFormField<FreeBeepMode>(
               initialValue: _mode,
@@ -670,6 +808,7 @@ class _BeepSettingsState extends State<_BeepSettings> {
           if (_form.currentState!.validate()) {
             Navigator.pop(context, (
               guided: _guided,
+              vibration: _vibration,
               mode: _mode,
               interval: _mode == FreeBeepMode.off
                   ? widget.store.freeBeepInterval

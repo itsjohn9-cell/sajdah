@@ -38,6 +38,7 @@ class SijdaStore extends ChangeNotifier {
   int guidedCount = 0;
   TasbeehMode mode = TasbeehMode.guided;
   bool guidedBeep = true;
+  bool vibrationBeep = true;
   FreeBeepMode freeBeepMode = FreeBeepMode.off;
   int freeBeepInterval = 100;
   int get activeCount => mode == TasbeehMode.guided ? guidedCount : tasbeeh;
@@ -85,12 +86,15 @@ class SijdaStore extends ChangeNotifier {
     }
     if (decoded['version'] == 3) {
       if (decoded['guidedBeep'] is! bool ||
+          (decoded.containsKey('vibrationBeep') &&
+              decoded['vibrationBeep'] is! bool) ||
           !FreeBeepMode.values.any(
             (mode) => mode.name == decoded['freeBeepMode'],
           )) {
         throw const FormatException('Invalid saved beep settings.');
       }
       store.guidedBeep = decoded['guidedBeep'] as bool;
+      store.vibrationBeep = (decoded['vibrationBeep'] as bool?) ?? true;
       store.freeBeepMode = FreeBeepMode.values.byName(
         decoded['freeBeepMode'] as String,
       );
@@ -118,6 +122,7 @@ class SijdaStore extends ChangeNotifier {
       'guidedCount': guidedCount,
       'mode': mode.name,
       'guidedBeep': guidedBeep,
+      'vibrationBeep': vibrationBeep,
       'freeBeepMode': freeBeepMode.name,
       'freeBeepInterval': freeBeepInterval,
       'balances': _balances,
@@ -169,13 +174,19 @@ class SijdaStore extends ChangeNotifier {
     }
 
     var newGuidedBeep = true;
+    var newVibrationBeep = true;
     var newFreeBeepMode = FreeBeepMode.off;
     var newInterval = 100;
     if (version == 3) {
       if (decoded['guidedBeep'] is! bool) {
         throw const FormatException('Invalid guided beep setting in backup.');
       }
+      if (decoded.containsKey('vibrationBeep') &&
+          decoded['vibrationBeep'] is! bool) {
+        throw const FormatException('Invalid vibration beep setting in backup.');
+      }
       newGuidedBeep = decoded['guidedBeep'] as bool;
+      newVibrationBeep = (decoded['vibrationBeep'] as bool?) ?? true;
       final rawFreeBeepMode = decoded['freeBeepMode'];
       if (rawFreeBeepMode is! String ||
           !FreeBeepMode.values.any((mode) => mode.name == rawFreeBeepMode)) {
@@ -202,6 +213,7 @@ class SijdaStore extends ChangeNotifier {
       newGuidedCount: newGuided,
       newMode: newMode,
       newGuidedBeep: newGuidedBeep,
+      newVibrationBeep: newVibrationBeep,
       newFreeBeepMode: newFreeBeepMode,
       newInterval: newInterval,
       balances: newBalances,
@@ -211,16 +223,21 @@ class SijdaStore extends ChangeNotifier {
   int get prayersRemaining =>
       prayerNames.fold(0, (total, name) => total + _balances[name]!);
 
+  bool isAlertMilestone(int countValue) {
+    return mode == TasbeehMode.guided
+        ? [34, 67, 100].contains(countValue)
+        : switch (freeBeepMode) {
+            FreeBeepMode.off => false,
+            FreeBeepMode.once => countValue == freeBeepInterval,
+            FreeBeepMode.every => countValue % freeBeepInterval == 0,
+          };
+  }
+
   Future<bool> incrementTasbeeh() async {
     if (saving || (mode == TasbeehMode.guided && guidedComplete)) return false;
     final next = activeCount + 1;
-    final shouldBeep = mode == TasbeehMode.guided
-        ? guidedBeep && [34, 67, 100].contains(next)
-        : switch (freeBeepMode) {
-            FreeBeepMode.off => false,
-            FreeBeepMode.once => next == freeBeepInterval,
-            FreeBeepMode.every => next % freeBeepInterval == 0,
-          };
+    final milestone = isAlertMilestone(next);
+    final shouldBeep = mode == TasbeehMode.guided ? guidedBeep && milestone : milestone;
     final saved = await _saveActive(next);
     return saved && shouldBeep;
   }
@@ -241,12 +258,14 @@ class SijdaStore extends ChangeNotifier {
     required bool guided,
     required FreeBeepMode freeMode,
     required int interval,
+    bool? vibration,
   }) {
     if (interval < 1 || interval > 1000000) {
       throw ArgumentError('Beep interval must be between 1 and 1,000,000.');
     }
     return _save(
       newGuidedBeep: guided,
+      newVibrationBeep: vibration,
       newFreeBeepMode: freeMode,
       newInterval: interval,
     );
@@ -264,6 +283,7 @@ class SijdaStore extends ChangeNotifier {
     int? newGuidedCount,
     TasbeehMode? newMode,
     bool? newGuidedBeep,
+    bool? newVibrationBeep,
     FreeBeepMode? newFreeBeepMode,
     int? newInterval,
     Map<String, int>? balances,
@@ -286,6 +306,7 @@ class SijdaStore extends ChangeNotifier {
           'guidedCount': newGuidedCount ?? guidedCount,
           'mode': (newMode ?? mode).name,
           'guidedBeep': newGuidedBeep ?? guidedBeep,
+          'vibrationBeep': newVibrationBeep ?? vibrationBeep,
           'freeBeepMode': (newFreeBeepMode ?? freeBeepMode).name,
           'freeBeepInterval': newInterval ?? freeBeepInterval,
           'balances': balances ?? _balances,
@@ -295,6 +316,7 @@ class SijdaStore extends ChangeNotifier {
       guidedCount = newGuidedCount ?? guidedCount;
       mode = newMode ?? mode;
       guidedBeep = newGuidedBeep ?? guidedBeep;
+      vibrationBeep = newVibrationBeep ?? vibrationBeep;
       freeBeepMode = newFreeBeepMode ?? freeBeepMode;
       freeBeepInterval = newInterval ?? freeBeepInterval;
       if (balances != null) {
